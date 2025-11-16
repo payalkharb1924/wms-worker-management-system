@@ -3,6 +3,7 @@ import env from "dotenv";
 import connectDB from "./config/db.js";
 import authRoutes from "./routes/auth.route.js";
 import workerRoutes from "./routes/worker.route.js";
+import attendanceRoutes from "./routes/attendance.route.js";
 
 env.config();
 connectDB();
@@ -17,6 +18,7 @@ app.get("/", (req, res) => {
 
 app.use("/api/auth", authRoutes);
 app.use("/api/workers", workerRoutes);
+app.use("/api/attendance", attendanceRoutes);
 
 app.listen(PORT, () => {
   console.log(`✅ Server running on port ` + PORT);
