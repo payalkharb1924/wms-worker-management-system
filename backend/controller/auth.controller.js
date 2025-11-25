@@ -13,7 +13,9 @@ export const signup = async (req, res) => {
     }
     let existingUser = await Farmer.findOne({ email: email });
     if (existingUser) {
-      return res.json({ msg: "Email already exists, Please Login." });
+      return res
+        .status(400)
+        .json({ msg: "Email already exists, Please Login." });
     }
     const hashedPassword = await bcrypt.hash(password, 10);
     const newUser = await Farmer.create({
