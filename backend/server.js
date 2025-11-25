@@ -6,11 +6,19 @@ import workerRoutes from "./routes/worker.route.js";
 import attendanceRoutes from "./routes/attendance.route.js";
 import advanceRoutes from "./routes/advance.route.js";
 import extraRoutes from "./routes/extra.route.js";
+import cors from "cors";
 
 env.config();
 connectDB();
 const PORT = process.env.PORT;
 const app = express();
+
+app.use(
+  cors({
+    origin: "*",
+    credentials: false,
+  })
+);
 
 app.use(express.json());
 
