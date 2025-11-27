@@ -7,13 +7,21 @@ import Dashboard from "./pages/Dashboard";
 import ProtectedRoute from "./components/ProtectedRoute";
 import Home from "./pages/Home";
 import Signup from "./pages/Signup";
+import PublicRoute from "./components/PublicRoute";
 
 export default function App() {
   return (
     <Provider store={store}>
       <Router>
         <Routes>
-          <Route path="/" element={<Home />} />
+          <Route
+            path="/"
+            element={
+              <PublicRoute>
+                <Home />
+              </PublicRoute>
+            }
+          />
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
 

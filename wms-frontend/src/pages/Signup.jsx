@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 import api from "../api/axios.js";
+import { Loader } from "lucide-react";
 
 const Signup = () => {
   const navigate = useNavigate();
@@ -12,6 +13,7 @@ const Signup = () => {
     password: "",
     confirmPassword: "",
   });
+  const [loading, setLoading] = useState(false);
 
   const handleChange = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value });
@@ -19,6 +21,7 @@ const Signup = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setLoading(true);
 
     if (form.password !== form.confirmPassword) {
       toast.error("Passwords do not match");
@@ -37,6 +40,8 @@ const Signup = () => {
     } catch (error) {
       console.log(error);
       toast.error(error.response?.data?.msg || "Signup failed. Try again");
+    } finally {
+      setLoading(false);
     }
   };
   return (
@@ -91,10 +96,20 @@ const Signup = () => {
             />
           </div>
           <button
-            className="w-full cursor-pointer primary-bg text-white py-3 mt-4 rounded-lg text-lg font-semibold hover:bg-orange-400 transition"
+            disabled={loading}
+            className={`w-full cursor-pointer primary-bg text-white py-3 mt-4 rounded-lg text-lg font-semibold hover:bg-orange-400 transition ${
+              loading ? "opacity-70 cursor-not-allowed" : "hover:bg-orange-400"
+            }`}
             type="submit"
           >
-            Sign Up
+            {loading ? (
+              <div className="flex justify-center items-center gap-2">
+                <Loader className="w-5 h-5 animate-spin" />
+                Signing up...
+              </div>
+            ) : (
+              "Sign Up"
+            )}
           </button>
         </form>
       </div>

@@ -10,10 +10,10 @@ import { authMiddleware } from "../middlewares/auth.middleware.js";
 
 const router = express.Router();
 
-router.post("/", authMiddleware, createAttendance);
+router.post("/add", authMiddleware, createAttendance);
 router.put("/:id", authMiddleware, updateAttendance);
 router.get("/worker/:workerId", authMiddleware, getAttendanceByWorker);
-router.get("/", authMiddleware, getAttendanceByDateRange);
+router.get("/range", authMiddleware, getAttendanceByDateRange);
 router.delete("/:id", authMiddleware, deleteAttendance);
 
 export default router;

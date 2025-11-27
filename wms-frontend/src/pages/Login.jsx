@@ -4,6 +4,7 @@ import { useDispatch } from "react-redux";
 import { useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 import { login } from "../features/auth/authSlice.js";
+import { Loader } from "lucide-react";
 
 const Login = () => {
   const navigate = useNavigate();
@@ -12,12 +13,14 @@ const Login = () => {
     email: "",
     password: "",
   });
+  const [loading, setLoading] = useState(false);
   const handleChange = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value });
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setLoading(true);
     try {
       const res = await api.post("/auth/login", {
         email: form.email,
@@ -35,6 +38,8 @@ const Login = () => {
     } catch (error) {
       console.log(error);
       toast.error(error.response?.data?.msg || "Login failed. Try again");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -69,10 +74,20 @@ const Login = () => {
           </div>
 
           <button
-            className="w-full cursor-pointer primary-bg text-white py-3 mt-4 rounded-lg text-lg font-semibold hover:bg-orange-400 transition"
+            disabled={loading}
+            className={`w-full cursor-pointer primary-bg text-white py-3 mt-4 rounded-lg text-lg font-semibold hover:bg-orange-400 transition ${
+              loading ? "opacity-70 cursor-not-allowed" : "hover:bg-orange-400"
+            }`}
             type="submit"
           >
-            Login
+            {loading ? (
+              <div className="flex justify-center items-center gap-2">
+                <Loader className="w-5 h-5 animate-spin" />
+                Logging in...
+              </div>
+            ) : (
+              "Login"
+            )}
           </button>
         </form>
       </div>
