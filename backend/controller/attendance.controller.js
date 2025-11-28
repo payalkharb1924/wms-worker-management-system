@@ -132,9 +132,14 @@ export const updateAttendance = async (req, res) => {
       },
       { new: true }
     );
+
+    const populatedUpdated = await Attendance.findById(
+      updatedAttendance._id
+    ).populate("workerId", "name");
+
     return res.status(200).json({
       msg: "Attendance Updated",
-      updatedAttendance,
+      updatedAttendance: populatedUpdated,
     });
   } catch (error) {
     console.log("Error in Updating Attendance", error);
@@ -152,9 +157,10 @@ export const getAttendanceByWorker = async (req, res) => {
     if (worker.farmerId.toString() !== req.user.id) {
       return res.status(403).json({ msg: "Not authorized" });
     }
-    const attendance = await Attendance.find({ workerId: workerId }).sort({
-      date: -1,
-    });
+    const attendance = await Attendance.find({ workerId })
+      .populate("workerId", "name")
+      .sort({ date: -1 });
+
     return res.status(200).json({
       msg: "Attendance fetched successfully",
       attendance,

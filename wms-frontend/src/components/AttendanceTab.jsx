@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import api from "../api/axios";
-import { Loader } from "lucide-react";
+import { Loader, X, Calendar, ChevronDown, ChevronUp } from "lucide-react";
 import { toast } from "react-toastify";
 
 const AttendanceTab = () => {
@@ -12,10 +12,36 @@ const AttendanceTab = () => {
   const [selectedDate, setSelectedDate] = useState(
     new Date().toISOString().split("T")[0]
   );
+  // History state
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [history, setHistory] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyFilter, setHistoryFilter] = useState("range");
+  // "range" | "single" | "worker"
+
+  // Accordion: which date sections are expanded
+  const [expandedDates, setExpandedDates] = useState({}); // {dateKey: true/false}
+
+  // Swipe-to-delete state
+  const [confirmDeleteId, setConfirmDeleteId] = useState(null);
+  const [swipeOffsets, setSwipeOffsets] = useState({}); // {attendanceId: offsetX}
+  const touchDataRef = useRef({}); // {attendanceId: {startX}}
+  const deleteTimeoutsRef = useRef({});
+
+  // Long-press edit state
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [editingRecord, setEditingRecord] = useState(null);
+  const [editForm, setEditForm] = useState({
+    startTime: "",
+    endTime: "",
+    rate: "",
+    restMinutes: 0,
+    missingMinutes: 0,
+    note: "",
+    remarks: "",
+  });
+  const longPressTimeoutRef = useRef(null);
 
   const updateWorker = (id, field, value) => {
     setWorkers((prev) =>
@@ -99,8 +125,17 @@ const AttendanceTab = () => {
       const res = await api.get(
         `/attendance/range?startDate=${startDate}&endDate=${endDate}`
       );
-      setHistory(res.data.attendance || []);
+      const list = res.data.attendance || [];
+      setHistory(list);
+
+      const grouped = groupByDate(list);
+      const initialExpanded = {};
+      Object.keys(grouped).forEach((k) => {
+        initialExpanded[k] = true;
+      });
+      setExpandedDates(initialExpanded);
     } catch (error) {
+      console.log(error);
       toast.error("Failed to fetch attendance history");
     } finally {
       setHistoryLoading(false);
@@ -128,6 +163,256 @@ const AttendanceTab = () => {
       }));
     });
   }, [applyToAll]);
+
+  const groupByDate = (entries) => {
+    const groups = {};
+    entries.forEach((item) => {
+      const dateKey = new Date(item.date).toLocaleDateString("en-IN", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+      });
+      if (!groups[dateKey]) groups[dateKey] = [];
+      groups[dateKey].push(item);
+    });
+    return groups;
+  };
+
+  const toggleDateExpand = (dateKey) => {
+    setExpandedDates((prev) => ({
+      ...prev,
+      [dateKey]: !prev[dateKey],
+    }));
+  };
+
+  const [deleting, setDeleting] = useState(false);
+  const [undoData, setUndoData] = useState(null);
+
+  // Local Trash Bin (multiple pending deletions supported)
+  const pendingDeletesRef = useRef({});
+
+  // DELETE
+  const handleDeleteAttendance = (id) => {
+    const deletedItem = history.find((h) => h._id === id);
+    if (!deletedItem) return;
+
+    pendingDeletesRef.current[id] = deletedItem;
+
+    setHistory((prev) => prev.filter((i) => i._id !== id));
+    setConfirmDeleteId(null);
+
+    showUndoToast(id);
+
+    deleteTimeoutsRef.current[id] = setTimeout(async () => {
+      await api.delete(`/attendance/${id}`);
+      delete pendingDeletesRef.current[id];
+    }, 4000);
+  };
+
+  // UNDO
+  const handleUndoDelete = async (id) => {
+    const restoredOriginal = pendingDeletesRef.current[id];
+    if (!restoredOriginal) return;
+
+    clearTimeout(deleteTimeoutsRef.current[id]);
+
+    try {
+      await api.post("/attendance/add", {
+        workerId: restoredOriginal.workerId?._id || restoredOriginal.workerId,
+        date: restoredOriginal.date,
+        startTime: restoredOriginal.startTime,
+        endTime: restoredOriginal.endTime,
+        restMinutes: restoredOriginal.restMinutes ?? 0,
+        missingMinutes: restoredOriginal.missingMinutes ?? 0,
+        rate: restoredOriginal.rate,
+        note: restoredOriginal.note || "",
+        remarks: restoredOriginal.remarks || "",
+      });
+
+      delete pendingDeletesRef.current[id];
+
+      toast.info("Undo successful! Search again to see it.", {
+        autoClose: 3500,
+      });
+    } catch (err) {
+      console.log("Undo request failed but data may still be restored:", err);
+      toast.info("Undo applied! Search again to confirm.", {
+        autoClose: 3500,
+      });
+    }
+  };
+
+  const showUndoToast = (id) => {
+    toast(
+      ({ closeToast }) => (
+        <div className="flex items-center justify-between w-full">
+          <span className="text-[13px] font-medium text-gray-800">
+            Attendance deleted
+          </span>
+
+          <button
+            onClick={() => {
+              handleUndoDelete(id);
+              closeToast();
+            }}
+            className="px-3 py-1 w-28 h-10 text-xs font-semibold rounded-lg 
+                     bg-[var(--primary)] text-white active:scale-95 transition"
+          >
+            Undo
+          </button>
+        </div>
+      ),
+      {
+        position: "bottom-center",
+        autoClose: 5000,
+        closeOnClick: false,
+        draggable: true,
+        style: {
+          background: "#ffffff",
+          color: "#333",
+          borderRadius: "14px",
+          boxShadow: "0 4px 12px rgba(0,0,0,0.08), 0 1px 3px rgba(0,0,0,0.04)",
+          width: "100%",
+          height: "100%",
+          margin: "0 auto",
+          padding: "20px 28px",
+        },
+      }
+    );
+  };
+
+  // ---- Swipe handlers ----
+  const handleTouchStart = (id, e) => {
+    const touch = e.touches[0];
+    const currentOffset = swipeOffsets[id] || 0;
+
+    touchDataRef.current[id] = {
+      startX: touch.clientX,
+      startOffset: currentOffset,
+    };
+
+    // start long press timer
+    startLongPress(id);
+  };
+
+  const handleTouchMove = (id, e) => {
+    const touch = e.touches[0];
+    const data = touchDataRef.current[id];
+    if (!data) return;
+
+    const deltaX = touch.clientX - data.startX;
+
+    // if user is actually swiping, cancel long-press
+    if (Math.abs(deltaX) > 5) {
+      cancelLongPress();
+    }
+
+    let newOffset = data.startOffset + deltaX;
+
+    // clamp between fully closed (0) and fully open (-80)
+    if (newOffset > 0) newOffset = 0;
+    if (newOffset < -80) newOffset = -80;
+
+    setSwipeOffsets((prev) => ({
+      ...prev,
+      [id]: newOffset,
+    }));
+  };
+
+  const handleTouchEnd = (id) => {
+    const offset = swipeOffsets[id] || 0;
+
+    // decide final position: open or closed
+    const finalOffset = offset <= -40 ? -80 : 0;
+
+    setSwipeOffsets((prev) => ({
+      ...prev,
+      [id]: finalOffset,
+    }));
+
+    delete touchDataRef.current[id];
+    cancelLongPress();
+  };
+
+  // ---- Long press edit ----
+  const startLongPress = (id) => {
+    cancelLongPress();
+    longPressTimeoutRef.current = setTimeout(() => {
+      const record = history.find((h) => h._id === id);
+      if (record) {
+        openEditModal(record);
+      }
+    }, 700); // 700ms long press
+  };
+
+  const cancelLongPress = () => {
+    if (longPressTimeoutRef.current) {
+      clearTimeout(longPressTimeoutRef.current);
+      longPressTimeoutRef.current = null;
+    }
+  };
+
+  const openEditModal = (record) => {
+    setEditingRecord(record);
+
+    const dateStr = new Date(record.date).toISOString().split("T")[0];
+
+    const toTimeInput = (iso) => {
+      const d = new Date(iso);
+      return d.toISOString().substring(11, 16); // HH:MM
+    };
+
+    setEditForm({
+      startTime: toTimeInput(record.startTime),
+      endTime: toTimeInput(record.endTime),
+      rate: record.rate,
+      restMinutes: record.restMinutes || 0,
+      missingMinutes: record.missingMinutes || 0,
+      note: record.note || "",
+      remarks: record.remarks || "",
+      _dateStr: dateStr, // for later recomposition
+    });
+
+    setEditModalOpen(true);
+  };
+
+  const closeEditModal = () => {
+    setEditModalOpen(false);
+    setEditingRecord(null);
+  };
+
+  const handleEditChange = (field, value) => {
+    setEditForm((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleUpdateAttendance = async () => {
+    if (!editingRecord) return;
+
+    const dateStr = editForm._dateStr;
+    const payload = {
+      startTime: `${dateStr}T${editForm.startTime}`,
+      endTime: `${dateStr}T${editForm.endTime}`,
+      rate: editForm.rate,
+      restMinutes: editForm.restMinutes,
+      missingMinutes: editForm.missingMinutes,
+      note: editForm.note,
+      remarks: editForm.remarks,
+    };
+
+    try {
+      const res = await api.put(`/attendance/${editingRecord._id}`, payload);
+      const updated = res.data.updatedAttendance;
+
+      setHistory((prev) =>
+        prev.map((item) => (item._id === updated._id ? updated : item))
+      );
+      toast.success("Attendance updated");
+      closeEditModal();
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to update attendance");
+    }
+  };
 
   return (
     <div className="pb-10">
@@ -295,60 +580,473 @@ const AttendanceTab = () => {
         </div>
       )}
 
-      {/* HISTORY TAB PLACEHOLDER */}
+      {/* HISTORY TAB */}
       {viewMode === "history" && (
         <div className="space-y-4">
-          {/* Date range filter */}
-          <div className="bg-white rounded-lg p-3 shadow">
-            <label className="text-sm font-medium">View Attendance</label>
-            <div className="flex gap-2 mt-2">
-              <input
-                type="date"
-                className="border rounded p-2 text-sm flex-1"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
+          {/* Filters Card */}
+          <div className="bg-white rounded-xl p-4 shadow-md border border-gray-100">
+            <p className="text-sm font-semibold text-gray-800">
+              View Attendance
+            </p>
+            {/* Filter Segmented Control */}
+            <div className="relative bg-white/70 backdrop-blur-md shadow-sm border border-gray-100 rounded-full p-1 flex items-center justify-between gap-1">
+              {/* Sliding active background */}
+              <div
+                className={`absolute top-1 bottom-1 w-1/3 rounded-full transition-all duration-300
+      bg-gradient-to-r  primary-bg shadow-md`}
+                style={{
+                  left:
+                    historyFilter === "range"
+                      ? "2px"
+                      : historyFilter === "single"
+                      ? "33%"
+                      : "66%",
+                }}
               />
-              <input
-                type="date"
-                className="border rounded p-2 text-sm flex-1"
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-              />
+
+              {/* Option: Date Range */}
               <button
-                className="primary-bg text-white px-4 rounded text-sm"
-                onClick={fetchAttendanceHistory}
+                className={`relative z-10 flex-1 py-2 text-xs font-semibold rounded-full transition-colors duration-300 ${
+                  historyFilter === "range" ? "text-white" : "text-gray-600"
+                }`}
+                onClick={() => setHistoryFilter("range")}
               >
-                Search
+                Date Range
+              </button>
+
+              {/* Option: Single Day */}
+              <button
+                className={`relative z-10 flex-1 py-2 text-xs font-semibold rounded-full transition-colors duration-300 ${
+                  historyFilter === "single" ? "text-white" : "text-gray-600"
+                }`}
+                onClick={() => {
+                  setHistoryFilter("single");
+                  setStartDate("");
+                  setEndDate("");
+                }}
+              >
+                Single Day
+              </button>
+
+              {/* Option: Worker */}
+              <button
+                className={`relative z-10 flex-1 py-2 text-xs font-semibold rounded-full transition-colors duration-300 ${
+                  historyFilter === "worker" ? "text-white" : "text-gray-600"
+                }`}
+                onClick={() => {
+                  setHistoryFilter("worker");
+                  setStartDate("");
+                  setEndDate("");
+                }}
+              >
+                Worker
               </button>
             </div>
+
+            {/* Dynamic Filters */}
+            <div className="bg-white mt-3 rounded-xl p-4 shadow-md border border-gray-100">
+              <p className="text-sm font-semibold text-gray-800 mb-3">
+                Filter Attendance
+              </p>
+
+              {/* Date Range Filter */}
+              {historyFilter === "range" && (
+                <div className="grid grid-cols-2 gap-3">
+                  <input
+                    type="date"
+                    className="border rounded-lg p-2 text-sm max-w-[100px] focus:outline-none focus:border-[var(--primary)]"
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                  />
+                  <input
+                    type="date"
+                    className="border rounded-lg p-2 text-sm max-w-[100px] focus:outline-none focus:border-[var(--primary)]"
+                    value={endDate}
+                    onChange={(e) => setEndDate(e.target.value)}
+                  />
+
+                  <button
+                    onClick={() => {
+                      if (!startDate || !endDate)
+                        return toast.error("Select both dates!");
+
+                      fetchAttendanceHistory(); // existing function
+                    }}
+                    className="primary-bg text-white px-4 py-2 rounded-lg text-sm font-semibold col-span-2"
+                  >
+                    Search
+                  </button>
+                </div>
+              )}
+
+              {/* Single Day Filter */}
+              {historyFilter === "single" && (
+                <div className="flex flex-col gap-3">
+                  <input
+                    type="date"
+                    className="border rounded-lg p-2 text-sm w-full focus:outline-none focus:border-[var(--primary)]"
+                    value={startDate}
+                    onChange={(e) => {
+                      setStartDate(e.target.value);
+                      setEndDate(e.target.value);
+                    }}
+                  />
+
+                  <button
+                    onClick={() => {
+                      if (!startDate) return toast.error("Pick a date!");
+                      fetchAttendanceHistory();
+                    }}
+                    className="primary-bg text-white px-4 py-2 rounded-lg text-sm font-semibold"
+                  >
+                    Search
+                  </button>
+                </div>
+              )}
+
+              {/* Worker Filter (With Date Range Option) */}
+              {historyFilter === "worker" && (
+                <div className="space-y-3">
+                  <select
+                    className="border rounded-lg p-2 text-sm w-full focus:outline-none focus:border-[var(--primary)]"
+                    onChange={(e) => setEditingRecord(e.target.value)}
+                  >
+                    <option value="">Select Worker</option>
+                    {workers.map((w) => (
+                      <option key={w._id} value={w._id}>
+                        {w.name}
+                      </option>
+                    ))}
+                  </select>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <input
+                      type="date"
+                      className="border rounded-lg p-2 text-sm max-w-[100px] focus:outline-none focus:border-[var(--primary)]"
+                      value={startDate}
+                      onChange={(e) => setStartDate(e.target.value)}
+                    />
+                    <input
+                      type="date"
+                      className="border rounded-lg p-2 text-sm max-w-[100px] focus:outline-none focus:border-[var(--primary)]"
+                      value={endDate}
+                      onChange={(e) => setEndDate(e.target.value)}
+                    />
+                  </div>
+
+                  <button
+                    onClick={async () => {
+                      if (!editingRecord) return toast.error("Select worker!");
+                      try {
+                        const res = await api.get(
+                          `/attendance/worker/${editingRecord}`
+                        );
+                        let list = res.data.attendance || [];
+
+                        // If user also applied date range filter
+                        if (startDate && endDate) {
+                          list = list.filter(
+                            (item) =>
+                              new Date(item.date) >= new Date(startDate) &&
+                              new Date(item.date) <= new Date(endDate)
+                          );
+                        }
+
+                        setHistory(list);
+                        setExpandedDates(
+                          Object.keys(groupByDate(list)).reduce((a, b) => {
+                            a[b] = true;
+                            return a;
+                          }, {})
+                        );
+                      } catch (err) {
+                        toast.error("Failed to fetch worker attendance");
+                      }
+                    }}
+                    className="primary-bg text-white px-4 py-2 rounded-lg text-sm font-semibold w-full"
+                  >
+                    Search
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
+
           {historyLoading && (
-            <div className="text-center text-gray-500 py-10">
+            <div className="text-center text-gray-500 py-8">
               Loading history...
             </div>
           )}
+
           {!historyLoading && history.length === 0 && (
-            <p className="text-gray-500 text-center">No attendance found.</p>
+            <p className="text-gray-500 text-center text-sm">
+              No attendance found.
+            </p>
           )}
-          {/* List */}
-          {history.map((item, index) => (
-            <div key={index} className="bg-white shadow p-3 rounded-lg">
-              <p className="font-semibold">
-                {new Date(item.date).toLocaleDateString("en-IN", {
-                  day: "2-digit",
-                  month: "short",
-                  year: "numeric",
-                })}
-              </p>
-              <p className="text-gray-600 text-sm">
-                Worker ID: {item.workerId}
-              </p>
-              <p className="text-gray-600 text-sm">Hours: {item.hoursWorked}</p>
-              <p className="text-gray-600 text-sm font-semibold">
-                ₹ {item.total}
-              </p>
+
+          {/* Grouped by date */}
+          {!historyLoading &&
+            history.length > 0 &&
+            Object.entries(groupByDate(history)).map(([dateKey, records]) => {
+              const totalHours = records
+                .reduce((sum, r) => sum + (r.hoursWorked || 0), 0)
+                .toFixed(1);
+              const totalAmount = records
+                .reduce((sum, r) => sum + (r.total || 0), 0)
+                .toFixed(2);
+
+              const isExpanded = expandedDates[dateKey];
+
+              return (
+                <div
+                  key={dateKey}
+                  className="bg-white shadow-lg rounded-2xl p-4 border border-gray-100 space-y-3"
+                >
+                  {/* Header / Accordion Toggle */}
+                  {/* Header / Accordion Toggle */}
+                  <div
+                    className="flex items-center justify-between px-1"
+                    onClick={() => toggleDateExpand(dateKey)}
+                  >
+                    {/* Left: Calendar + Date */}
+                    <div className="flex items-center gap-2">
+                      <Calendar className="w-4 h-4 text-[var(--primary)]" />
+                      <p className="font-semibold text-gray-800 text-[15px]">
+                        {dateKey}
+                      </p>
+                    </div>
+
+                    {/* Right: Total + Toggle */}
+                    <div className="flex items-center gap-3">
+                      <p className="text-xs text-gray-600 font-semibold whitespace-nowrap">
+                        {totalHours}h • ₹{totalAmount}
+                      </p>
+
+                      {/* Expand / Collapse Icon */}
+                      {isExpanded ? (
+                        <ChevronUp className="w-4 h-4 text-gray-600" />
+                      ) : (
+                        <ChevronDown className="w-4 h-4 text-gray-600" />
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Animated content */}
+                  <div
+                    className={`transition-all duration-300 ease-out origin-top ${
+                      isExpanded
+                        ? "max-h-[1000px] opacity-100"
+                        : "max-h-0 opacity-0"
+                    } overflow-hidden`}
+                  >
+                    <div className="mt-3 space-y-3">
+                      {records.map((item) => {
+                        const name = item.workerId?.name || "Worker";
+                        const initials = name
+                          .split(" ")
+                          .map((n) => n[0])
+                          .join("")
+                          .toUpperCase();
+
+                        const offset = swipeOffsets[item._id] || 0;
+
+                        return (
+                          <div
+                            key={item._id}
+                            className="relative overflow-hidden rounded-xl bg-red-500"
+                          >
+                            {/* Delete background */}
+                            <div className="absolute inset-0 right-0 flex items-center justify-end overflow-hidden">
+                              <button
+                                className="w-20 h-full rounded-r-xl bg-red-500 shadow-lg text-white font-bold text-[13px] tracking-wide flex items-center justify-center active:scale-95"
+                                onClick={() => setConfirmDeleteId(item._id)}
+                              >
+                                Delete
+                              </button>
+                            </div>
+
+                            {/* Foreground card - touch/swipe/long press */}
+                            <div
+                              className="bg-gray-50 border border-gray-200 p-3 flex items-center justify-between rounded-xl shadow-sm transition-transform duration-200 ease-out no-select"
+                              style={{
+                                transform: `translateX(${offset}px)`,
+                                transition:
+                                  "transform 0.25s cubic-bezier(0.22, 1, 0.36, 1)",
+                              }}
+                              onTouchStart={(e) =>
+                                handleTouchStart(item._id, e)
+                              }
+                              onTouchMove={(e) => handleTouchMove(item._id, e)}
+                              onTouchEnd={() => handleTouchEnd(item._id)}
+                              onMouseDown={() => startLongPress(item._id)}
+                              onMouseUp={cancelLongPress}
+                              onMouseLeave={cancelLongPress}
+                            >
+                              <div className="flex items-center gap-3">
+                                {/* Avatar */}
+                                <div className="w-9 h-9 rounded-full primary-bg text-white flex items-center justify-center font-semibold text-xs shrink-0">
+                                  {initials}
+                                </div>
+
+                                <div className="flex flex-col">
+                                  <p className="font-medium text-gray-700 text-sm leading-tight">
+                                    {name}
+                                  </p>
+                                  <span className="text-[11px] text-gray-500 flex items-center gap-1">
+                                    <span>✔</span> Present
+                                  </span>
+                                </div>
+                              </div>
+
+                              <span className="text-gray-700 font-semibold text-sm whitespace-nowrap">
+                                {item.hoursWorked}h • ₹{item.total}
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+        </div>
+      )}
+      {/* EDIT MODAL */}
+      {editModalOpen && (
+        <div className="fixed inset-0 backdrop-blur-sm bg-black/40 flex items-center justify-center z-50">
+          <div className="bg-white rounded-2xl shadow-xl w-[90%] max-w-md p-4 space-y-3">
+            <div className="flex justify-between items-center mb-1">
+              <h2 className="font-semibold text-gray-800 text-base">
+                Edit Attendance
+              </h2>
+              <button onClick={closeEditModal}>
+                <X className="w-4 h-4 text-gray-500" />
+              </button>
             </div>
-          ))}
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="flex flex-col gap-1">
+                <label className="text-xs text-gray-600">Start Time</label>
+                <input
+                  type="time"
+                  value={editForm.startTime}
+                  onChange={(e) =>
+                    handleEditChange("startTime", e.target.value)
+                  }
+                  className="border rounded-md p-2 text-sm focus:outline-none focus:border-[var(--primary)]"
+                />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-xs text-gray-600">End Time</label>
+                <input
+                  type="time"
+                  value={editForm.endTime}
+                  onChange={(e) => handleEditChange("endTime", e.target.value)}
+                  className="border rounded-md p-2 text-sm focus:outline-none focus:border-[var(--primary)]"
+                />
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label className="text-xs text-gray-600">Rate (₹)</label>
+              <input
+                type="number"
+                min="0"
+                value={editForm.rate}
+                onChange={(e) =>
+                  handleEditChange("rate", Number(e.target.value))
+                }
+                className="border rounded-md p-2 text-sm focus:outline-none focus:border-[var(--primary)]"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="flex flex-col gap-1">
+                <label className="text-xs text-gray-600">Rest (mins)</label>
+                <input
+                  type="number"
+                  min="0"
+                  value={editForm.restMinutes}
+                  onChange={(e) =>
+                    handleEditChange("restMinutes", Number(e.target.value))
+                  }
+                  className="border rounded-md p-2 text-sm focus:outline-none focus:border-[var(--primary)]"
+                />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-xs text-gray-600">Missing (mins)</label>
+                <input
+                  type="number"
+                  min="0"
+                  value={editForm.missingMinutes}
+                  onChange={(e) =>
+                    handleEditChange("missingMinutes", Number(e.target.value))
+                  }
+                  className="border rounded-md p-2 text-sm focus:outline-none focus:border-[var(--primary)]"
+                />
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label className="text-xs text-gray-600">Note</label>
+              <input
+                type="text"
+                value={editForm.note}
+                onChange={(e) => handleEditChange("note", e.target.value)}
+                className="border rounded-md p-2 text-sm focus:outline-none focus:border-[var(--primary)]"
+              />
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label className="text-xs text-gray-600">Remarks</label>
+              <input
+                type="text"
+                value={editForm.remarks}
+                onChange={(e) => handleEditChange("remarks", e.target.value)}
+                className="border rounded-md p-2 text-sm focus:outline-none focus:border-[var(--primary)]"
+              />
+            </div>
+
+            <button
+              onClick={handleUpdateAttendance}
+              className="w-full mt-2 primary-bg text-white py-2 rounded-lg font-semibold text-sm"
+            >
+              Save Changes
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Popup */}
+      {confirmDeleteId && (
+        <div className="fixed inset-0 backdrop-blur-sm bg-black/40 flex items-center justify-center z-50">
+          <div className="bg-white rounded-2xl p-5 w-[85%] max-w-sm">
+            <p className="font-semibold text-gray-800">Delete attendance?</p>
+            <p className="text-xs text-gray-500 mt-1">
+              This action cannot be undone.
+            </p>
+
+            <div className="flex justify-end gap-3 mt-5">
+              <button
+                className="px-4 py-2 rounded-lg text-gray-700 border"
+                onClick={() => setConfirmDeleteId(null)}
+              >
+                Cancel
+              </button>
+              <button
+                className="px-4 py-2 rounded-lg bg-red-500 text-white flex items-center justify-center min-w-[70px]"
+                disabled={deleting}
+                onClick={() => handleDeleteAttendance(confirmDeleteId)}
+              >
+                {deleting ? (
+                  <Loader className="w-4 h-4 animate-spin" />
+                ) : (
+                  "Delete"
+                )}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

@@ -86,3 +86,17 @@ input:checked + .toggle-slider {
 input:checked + .toggle-slider:before {
   transform: translateX(20px);
 }
+
+.primary-bg {
+  background-color: var(--primary);
+}
+
+.primary-text {
+  color: var(--primary);
+}
+
+.no-select {
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
