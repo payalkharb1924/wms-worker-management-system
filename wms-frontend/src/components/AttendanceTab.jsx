@@ -9,6 +9,8 @@ const AttendanceTab = () => {
   const [viewMode, setViewMode] = useState("daily");
   const [saving, setSaving] = useState(false);
   const [applyToAll, setApplyToAll] = useState(false);
+  const [updateLoading, setUpdateLoading] = useState(false);
+  const [historySearchLoading, setHistorySearchLoading] = useState(false);
   const [selectedDate, setSelectedDate] = useState(
     new Date().toISOString().split("T")[0]
   );
@@ -117,6 +119,7 @@ const AttendanceTab = () => {
   };
 
   const fetchAttendanceHistory = async () => {
+    setHistorySearchLoading(true);
     if (!startDate || !endDate) {
       return toast.error("Select both start & end date!");
     }
@@ -139,6 +142,7 @@ const AttendanceTab = () => {
       toast.error("Failed to fetch attendance history");
     } finally {
       setHistoryLoading(false);
+      setHistorySearchLoading(false);
     }
   };
 
@@ -386,6 +390,7 @@ const AttendanceTab = () => {
   };
 
   const handleUpdateAttendance = async () => {
+    setUpdateLoading(true);
     if (!editingRecord) return;
 
     const dateStr = editForm._dateStr;
@@ -411,6 +416,8 @@ const AttendanceTab = () => {
     } catch (err) {
       console.error(err);
       toast.error("Failed to update attendance");
+    } finally {
+      setUpdateLoading(false);
     }
   };
 
@@ -666,15 +673,21 @@ const AttendanceTab = () => {
                   />
 
                   <button
-                    onClick={() => {
-                      if (!startDate || !endDate)
-                        return toast.error("Select both dates!");
-
-                      fetchAttendanceHistory(); // existing function
-                    }}
-                    className="primary-bg text-white px-4 py-2 rounded-lg text-sm font-semibold col-span-2"
+                    onClick={fetchAttendanceHistory}
+                    disabled={historySearchLoading}
+                    className={`primary-bg text-white px-4 py-2 rounded text-sm col-span-2 
+              flex items-center justify-center gap-2 transition ${
+                historySearchLoading ? "opacity-70 cursor-not-allowed" : ""
+              }`}
                   >
-                    Search
+                    {historySearchLoading ? (
+                      <>
+                        <Loader className="w-4 h-4 animate-spin" />
+                        Loading...
+                      </>
+                    ) : (
+                      "Search"
+                    )}
                   </button>
                 </div>
               )}
@@ -697,9 +710,20 @@ const AttendanceTab = () => {
                       if (!startDate) return toast.error("Pick a date!");
                       fetchAttendanceHistory();
                     }}
-                    className="primary-bg text-white px-4 py-2 rounded-lg text-sm font-semibold"
+                    disabled={historySearchLoading}
+                    className={`primary-bg text-white px-4 py-2 rounded-lg text-sm font-semibold 
+              flex items-center justify-center gap-2 ${
+                historySearchLoading ? "opacity-70 cursor-not-allowed" : ""
+              }`}
                   >
-                    Search
+                    {historySearchLoading ? (
+                      <>
+                        <Loader className="w-4 h-4 animate-spin" />
+                        Loading...
+                      </>
+                    ) : (
+                      "Search"
+                    )}
                   </button>
                 </div>
               )}
@@ -737,13 +761,15 @@ const AttendanceTab = () => {
                   <button
                     onClick={async () => {
                       if (!editingRecord) return toast.error("Select worker!");
+
+                      setHistorySearchLoading(true);
+
                       try {
                         const res = await api.get(
                           `/attendance/worker/${editingRecord}`
                         );
                         let list = res.data.attendance || [];
 
-                        // If user also applied date range filter
                         if (startDate && endDate) {
                           list = list.filter(
                             (item) =>
@@ -761,11 +787,24 @@ const AttendanceTab = () => {
                         );
                       } catch (err) {
                         toast.error("Failed to fetch worker attendance");
+                      } finally {
+                        setHistorySearchLoading(false);
                       }
                     }}
-                    className="primary-bg text-white px-4 py-2 rounded-lg text-sm font-semibold w-full"
+                    disabled={historySearchLoading}
+                    className={`primary-bg text-white px-4 py-2 rounded-lg text-sm font-semibold 
+              w-full flex items-center justify-center gap-2 ${
+                historySearchLoading ? "opacity-70 cursor-not-allowed" : ""
+              }`}
                   >
-                    Search
+                    {historySearchLoading ? (
+                      <>
+                        <Loader className="w-4 h-4 animate-spin" />
+                        Loading...
+                      </>
+                    ) : (
+                      "Search"
+                    )}
                   </button>
                 </div>
               )}
@@ -1010,9 +1049,16 @@ const AttendanceTab = () => {
 
             <button
               onClick={handleUpdateAttendance}
-              className="w-full mt-2 primary-bg text-white py-2 rounded-lg font-semibold text-sm"
+              disabled={updateLoading}
+              className={`primary-bg text-white px-4 py-2 rounded w-full flex items-center justify-center gap-2 transition ${
+                updateLoading ? "opacity-70 cursor-not-allowed" : ""
+              }`}
             >
-              Save Changes
+              {updateLoading ? (
+                <Loader className="animate-spin" size={18} />
+              ) : (
+                "Save"
+              )}
             </button>
           </div>
         </div>
