@@ -183,7 +183,9 @@ export const getAttendanceByDateRange = async (req, res) => {
     const attendance = await Attendance.find({
       workerId: { $in: workerIds },
       date: { $gte: start, $lte: end },
-    }).sort({ date: -1 });
+    })
+      .populate("workerId", "name")
+      .sort({ date: -1 });
 
     return res.status(200).json({
       msg: "Attendance fetched successfully",

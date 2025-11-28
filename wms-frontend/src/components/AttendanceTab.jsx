@@ -12,6 +12,10 @@ const AttendanceTab = () => {
   const [selectedDate, setSelectedDate] = useState(
     new Date().toISOString().split("T")[0]
   );
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+  const [history, setHistory] = useState([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
 
   const updateWorker = (id, field, value) => {
     setWorkers((prev) =>
@@ -34,8 +38,8 @@ const AttendanceTab = () => {
       .map((w) => ({
         workerId: w._id,
         date: selectedDate,
-        startTime: w.startTime,
-        endTime: w.endTime,
+        startTime: `${selectedDate}T${w.startTime}`,
+        endTime: `${selectedDate}T${w.endTime}`,
         restMinutes: w.restMinutes || 0,
         missingMinutes: w.missingMinutes || 0,
         rate: w.rate,
@@ -83,6 +87,23 @@ const AttendanceTab = () => {
       toast.error("Failed to load workers");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchAttendanceHistory = async () => {
+    if (!startDate || !endDate) {
+      return toast.error("Select both start & end date!");
+    }
+    try {
+      setHistoryLoading(true);
+      const res = await api.get(
+        `/attendance/range?startDate=${startDate}&endDate=${endDate}`
+      );
+      setHistory(res.data.attendance || []);
+    } catch (error) {
+      toast.error("Failed to fetch attendance history");
+    } finally {
+      setHistoryLoading(false);
     }
   };
 
@@ -144,12 +165,14 @@ const AttendanceTab = () => {
               <label className="text-sm font-medium whitespace-nowrap">
                 Apply to all
               </label>
-              <input
-                type="checkbox"
-                checked={applyToAll}
-                onChange={(e) => setApplyToAll(e.target.checked)}
-                className="accent-[var(--primary)]"
-              />
+              <label className="toggle-switch">
+                <input
+                  type="checkbox"
+                  checked={applyToAll}
+                  onChange={(e) => setApplyToAll(e.target.checked)}
+                />
+                <span className="toggle-slider"></span>
+              </label>
             </div>
 
             {/* Date */}
@@ -194,14 +217,16 @@ const AttendanceTab = () => {
                       <p className="font-semibold">{w.name}</p>
                       <label className="text-xs flex items-center gap-1">
                         Present
-                        <input
-                          type="checkbox"
-                          checked={w.present || false}
-                          onChange={(e) =>
-                            updateWorker(w._id, "present", e.target.checked)
-                          }
-                          className="accent-[var(--primary)]"
-                        />
+                        <label className="toggle-switch">
+                          <input
+                            type="checkbox"
+                            checked={w.present || false}
+                            onChange={(e) =>
+                              updateWorker(w._id, "present", e.target.checked)
+                            }
+                          />
+                          <span className="toggle-slider"></span>
+                        </label>
                       </label>
                     </div>
 
@@ -272,8 +297,58 @@ const AttendanceTab = () => {
 
       {/* HISTORY TAB PLACEHOLDER */}
       {viewMode === "history" && (
-        <div className="text-center text-gray-600 py-10">
-          📅 History Coming Next...
+        <div className="space-y-4">
+          {/* Date range filter */}
+          <div className="bg-white rounded-lg p-3 shadow">
+            <label className="text-sm font-medium">View Attendance</label>
+            <div className="flex gap-2 mt-2">
+              <input
+                type="date"
+                className="border rounded p-2 text-sm flex-1"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+              />
+              <input
+                type="date"
+                className="border rounded p-2 text-sm flex-1"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+              />
+              <button
+                className="primary-bg text-white px-4 rounded text-sm"
+                onClick={fetchAttendanceHistory}
+              >
+                Search
+              </button>
+            </div>
+          </div>
+          {historyLoading && (
+            <div className="text-center text-gray-500 py-10">
+              Loading history...
+            </div>
+          )}
+          {!historyLoading && history.length === 0 && (
+            <p className="text-gray-500 text-center">No attendance found.</p>
+          )}
+          {/* List */}
+          {history.map((item, index) => (
+            <div key={index} className="bg-white shadow p-3 rounded-lg">
+              <p className="font-semibold">
+                {new Date(item.date).toLocaleDateString("en-IN", {
+                  day: "2-digit",
+                  month: "short",
+                  year: "numeric",
+                })}
+              </p>
+              <p className="text-gray-600 text-sm">
+                Worker ID: {item.workerId}
+              </p>
+              <p className="text-gray-600 text-sm">Hours: {item.hoursWorked}</p>
+              <p className="text-gray-600 text-sm font-semibold">
+                ₹ {item.total}
+              </p>
+            </div>
+          ))}
         </div>
       )}
     </div>
