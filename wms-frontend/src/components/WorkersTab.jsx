@@ -173,7 +173,7 @@ const WorkersTab = () => {
       setSettleForm({
         startDate: pendingSummary.suggestedStartDate
           ? pendingSummary.suggestedStartDate.split("T")[0]
-          : "2020-01-01", // beginning of time
+          : "2025-01-01", // beginning of time
         endDate: pendingSummary.suggestedEndDate.split("T")[0],
         note: "",
       });

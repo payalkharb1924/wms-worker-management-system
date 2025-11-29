@@ -185,7 +185,7 @@ export const createSettlementForWorker = async (req, res) => {
       attendanceTotal,
       extrasTotal,
       advancesTotal,
-      netPending: netAmount,
+      netAmount,
       note: note || "",
     });
 
@@ -241,12 +241,15 @@ export const createSettlementForWorker = async (req, res) => {
 
     return res.status(201).json({
       msg: "Settlement created",
-      settlement,
+      settlement: {
+        ...settlement._doc,
+        netPending: settlement.netAmount, // alias for frontend
+      },
       remaining: {
         attendanceTotal: remainingAttendanceTotal,
         advancesTotal: remainingAdvancesTotal,
         extrasTotal: remainingExtrasTotal,
-        netPending: remainingNet,
+        netPending: remainingNet, // frontend uses this
       },
     });
   } catch (error) {
