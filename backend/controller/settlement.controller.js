@@ -185,7 +185,7 @@ export const createSettlementForWorker = async (req, res) => {
       attendanceTotal,
       extrasTotal,
       advancesTotal,
-      netAmount,
+      netPending: netAmount,
       note: note || "",
     });
 

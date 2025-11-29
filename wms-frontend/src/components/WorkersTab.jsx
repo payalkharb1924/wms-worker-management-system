@@ -9,7 +9,6 @@ const WorkersTab = () => {
   const [loading, setLoading] = useState(false);
   const [updateLoading, setUpdateLoading] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
-
   const [fetchLoading, setFetchLoading] = useState(true);
   const [selectedWorker, setSelectedWorker] = useState(null);
   const [showDetails, setShowDetails] = useState(false);
@@ -18,6 +17,16 @@ const WorkersTab = () => {
     name: "",
     remarks: "",
     status: "active",
+  });
+  const [summaryLoading, setSummaryLoading] = useState(false);
+  const [pendingSummary, setPendingSummary] = useState(null);
+  const [showSettlePopup, setShowSettlePopup] = useState(false);
+  const [settleLoading, setSettleLoading] = useState(false);
+
+  const [settleForm, setSettleForm] = useState({
+    startDate: "",
+    endDate: "",
+    note: "",
   });
 
   const handleUpdateWorker = async (id) => {
@@ -84,14 +93,67 @@ const WorkersTab = () => {
     }
   };
 
+  const fetchWorkerSummary = async (workerId) => {
+    try {
+      setSummaryLoading(true);
+      const res = await api.get(`/settlement/worker/${workerId}/pending`);
+      setPendingSummary(res.data);
+    } catch (err) {
+      toast.error("Failed to load summary");
+    } finally {
+      setSummaryLoading(false);
+    }
+  };
+
   const openWorkerDetails = (worker) => {
     setSelectedWorker(worker);
+    setPendingSummary(null);
     setShowDetails(true);
+
+    // NEW: Load summary when popup opens
+    fetchWorkerSummary(worker._id);
+  };
+
+  const handleSettlementConfirm = async () => {
+    if (!settleForm.startDate || !settleForm.endDate)
+      return toast.error("Select both dates!");
+
+    setSettleLoading(true);
+    try {
+      await api.post(`/settlement/worker/${selectedWorker._id}/settle`, {
+        startDate: settleForm.startDate,
+        endDate: settleForm.endDate,
+        note: settleForm.note,
+      });
+
+      toast.success("Settlement saved!");
+      setShowSettlePopup(false);
+
+      // refresh pending summary
+      fetchWorkerSummary(selectedWorker._id);
+    } catch (err) {
+      toast.error(err.response?.data?.msg || "Settlement failed");
+    } finally {
+      setSettleLoading(false);
+    }
   };
 
   useEffect(() => {
     fetchWorkers();
   }, []);
+
+  useEffect(() => {
+    if (showSettlePopup && pendingSummary) {
+      setSettleForm({
+        startDate: pendingSummary.suggestedStartDate
+          ? pendingSummary.suggestedStartDate.split("T")[0]
+          : "2020-01-01", // beginning of time
+        endDate: pendingSummary.suggestedEndDate.split("T")[0],
+        note: "",
+      });
+    }
+  }, [showSettlePopup]);
+
   return (
     <div>
       {/* Header */}
@@ -244,6 +306,68 @@ const WorkersTab = () => {
                     )}
                   </button>
                 </div>
+                {/* Summary Section */}
+                <div className="mt-4 bg-gray-50 rounded-xl p-4 border border-gray-200">
+                  <p className="font-semibold mb-3 text-gray-700">
+                    📊 Earnings Summary
+                  </p>
+
+                  {summaryLoading ? (
+                    <div className="text-center text-gray-500">
+                      <Loader className="w-5 h-5 animate-spin mx-auto" />
+                    </div>
+                  ) : pendingSummary ? (
+                    <>
+                      <div className="text-sm space-y-1">
+                        <div className="flex justify-between">
+                          <span>Attendance Wage</span>
+                          <span className="font-semibold">
+                            ₹{pendingSummary.amounts.attendanceTotal}
+                          </span>
+                        </div>
+                        <div className="flex justify-between text-red-600">
+                          <span>Extras (items)</span>
+                          <span className="font-semibold">
+                            -₹{pendingSummary.amounts.extrasTotal}
+                          </span>
+                        </div>
+                        <div className="flex justify-between text-red-600">
+                          <span>Advances Paid</span>
+                          <span className="font-semibold">
+                            -₹{pendingSummary.amounts.advancesTotal}
+                          </span>
+                        </div>
+
+                        <div className="border-t my-2"></div>
+
+                        <div className="flex justify-between font-bold text-[var(--primary)]">
+                          <span>Net Pending</span>
+                          <span>₹{pendingSummary.amounts.netPending}</span>
+                        </div>
+                      </div>
+
+                      {/* Last Settlement Info */}
+                      <p className="text-xs text-gray-500 mt-3">
+                        Last settled till:{" "}
+                        {pendingSummary.lastSettledTill
+                          ? new Date(
+                              pendingSummary.lastSettledTill
+                            ).toLocaleDateString("en-IN")
+                          : "Not settled yet"}
+                      </p>
+
+                      <button
+                        className="primary-bg mt-4 w-full py-2 rounded-lg text-white font-semibold"
+                        onClick={() => setShowSettlePopup(true)}
+                      >
+                        Settle Payment
+                      </button>
+                    </>
+                  ) : (
+                    <p className="text-gray-500 text-sm">No data</p>
+                  )}
+                </div>
+
                 <button
                   onClick={() => setShowDetails(false)}
                   className="w-full mt-3 py-2 bg-gray-200 rounded-md text-sm font-medium"
@@ -308,6 +432,77 @@ const WorkersTab = () => {
                 </div>
               </>
             )}
+          </div>
+        </div>
+      )}
+      {/* SETTLE PAYMENT POPUP */}
+      {showSettlePopup && pendingSummary && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-white w-[90%] max-w-md p-5 rounded-xl shadow-lg space-y-3">
+            <h3 className="text-lg font-bold">Settle Payment</h3>
+
+            {/* Date range */}
+            <div className="grid grid-cols-2 gap-3 text-sm">
+              <div>
+                <label className="text-xs text-gray-500">Start Date</label>
+                <input
+                  type="date"
+                  value={settleForm.startDate}
+                  onChange={(e) =>
+                    setSettleForm({ ...settleForm, startDate: e.target.value })
+                  }
+                  className="border rounded-md p-2 w-full"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-gray-500">End Date</label>
+                <input
+                  type="date"
+                  value={settleForm.endDate}
+                  onChange={(e) =>
+                    setSettleForm({ ...settleForm, endDate: e.target.value })
+                  }
+                  className="border rounded-md p-2 w-full"
+                />
+              </div>
+            </div>
+
+            {/* Note */}
+            <input
+              type="text"
+              placeholder="Payment note (optional)"
+              className="border rounded-md p-2 text-sm w-full"
+              value={settleForm.note}
+              onChange={(e) =>
+                setSettleForm({ ...settleForm, note: e.target.value })
+              }
+            />
+
+            {/* Amount shown clearly */}
+            <div className="text-end font-bold text-[var(--primary)] text-lg">
+              ₹{pendingSummary.amounts.netPending}
+            </div>
+
+            <button
+              className="primary-bg w-full py-2 rounded-lg text-white font-semibold"
+              disabled={settleLoading}
+              onClick={handleSettlementConfirm}
+            >
+              {settleLoading ? (
+                <div className="flex justify-center gap-2">
+                  <Loader className="w-4 h-4 animate-spin" /> Settling...
+                </div>
+              ) : (
+                "Confirm Settlement"
+              )}
+            </button>
+
+            <button
+              className="w-full py-2 bg-gray-200 rounded-lg text-sm"
+              onClick={() => setShowSettlePopup(false)}
+            >
+              Cancel
+            </button>
           </div>
         </div>
       )}
