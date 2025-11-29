@@ -28,6 +28,8 @@ const WorkersTab = () => {
     endDate: "",
     note: "",
   });
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deletePassword, setDeletePassword] = useState("");
 
   const handleUpdateWorker = async (id) => {
     try {
@@ -135,6 +137,30 @@ const WorkersTab = () => {
       toast.error(err.response?.data?.msg || "Settlement failed");
     } finally {
       setSettleLoading(false);
+    }
+  };
+
+  const confirmDeleteWorker = async () => {
+    if (!deletePassword) return toast.error("Enter your password!");
+
+    try {
+      setDeleteLoading(true);
+
+      // Verify password (custom API)
+      await api.post("/auth/verify-password", { password: deletePassword });
+
+      // If password correct → delete worker
+      await api.delete(`/workers/${selectedWorker._id}`);
+
+      toast.success("Worker deleted successfully");
+      setShowDeleteConfirm(false);
+      setShowDetails(false);
+      fetchWorkers();
+    } catch (err) {
+      toast.error(err.response?.data?.msg || "Incorrect password!");
+    } finally {
+      setDeletePassword("");
+      setDeleteLoading(false);
     }
   };
 
@@ -294,7 +320,7 @@ const WorkersTab = () => {
                   </button>
                   <button
                     className="bg-red-500 text-white flex-1 py-2 rounded-md font-semibold"
-                    onClick={() => handleDeleteWorker(selectedWorker._id)}
+                    onClick={() => setShowDeleteConfirm(true)}
                     disabled={deleteLoading}
                   >
                     {deleteLoading ? (
@@ -500,6 +526,47 @@ const WorkersTab = () => {
             <button
               className="w-full py-2 bg-gray-200 rounded-lg text-sm"
               onClick={() => setShowSettlePopup(false)}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 bg-black/40 flex justify-center items-center z-50">
+          <div className="bg-white p-5 w-[90%] max-w-md rounded-xl shadow-lg space-y-3">
+            <h3 className="font-bold text-lg text-red-600">Confirm Delete</h3>
+            <p className="text-sm text-gray-700">
+              Deleting a worker will permanently remove all data related to:
+              <strong> {selectedWorker.name}</strong>. This cannot be undone!
+            </p>
+
+            <input
+              type="password"
+              placeholder="Enter your password"
+              className="border p-2 text-sm w-full rounded-md"
+              value={deletePassword}
+              onChange={(e) => setDeletePassword(e.target.value)}
+            />
+
+            <button
+              className="bg-red-600 text-white w-full py-2 rounded-lg font-semibold"
+              disabled={deleteLoading}
+              onClick={confirmDeleteWorker}
+            >
+              {deleteLoading ? (
+                <div className="flex justify-center gap-2">
+                  <Loader className="w-4 h-4 animate-spin" />
+                  Deleting...
+                </div>
+              ) : (
+                "Confirm Delete"
+              )}
+            </button>
+
+            <button
+              className="w-full py-2 bg-gray-200 rounded-lg text-sm"
+              onClick={() => setShowDeleteConfirm(false)}
             >
               Cancel
             </button>

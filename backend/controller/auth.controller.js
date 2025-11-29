@@ -83,3 +83,17 @@ export const me = async (req, res) => {
     return res.status(500).json({ msg: "Me Error" });
   }
 };
+
+export const verifyPassword = async (req, res) => {
+  try {
+    const farmer = await Farmer.findById(req.user.id);
+    const match = await bcrypt.compare(req.body.password, farmer.password);
+
+    if (!match) return res.status(400).json({ msg: "Wrong password" });
+
+    return res.status(200).json({ msg: "Password verified" });
+  } catch (error) {
+    console.log(error);
+    return res.status(500).json({ msg: "Error verifying password" });
+  }
+};
