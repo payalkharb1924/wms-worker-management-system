@@ -87,6 +87,8 @@ export const me = async (req, res) => {
 export const verifyPassword = async (req, res) => {
   try {
     const farmer = await Farmer.findById(req.user.id);
+    if (!farmer) return res.status(404).json({ msg: "Farmer not found" });
+
     const match = await bcrypt.compare(req.body.password, farmer.password);
 
     if (!match) return res.status(400).json({ msg: "Wrong password" });
