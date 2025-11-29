@@ -3,146 +3,65 @@ import api from "../api/axios";
 import { Loader, X, Calendar, ChevronDown, ChevronUp } from "lucide-react";
 import { toast } from "react-toastify";
 
-const AttendanceTab = () => {
+const ExtrasTab = () => {
   const [workers, setWorkers] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [viewMode, setViewMode] = useState("daily");
-  const [saving, setSaving] = useState(false);
-  const [applyToAll, setApplyToAll] = useState(false);
-  const [updateLoading, setUpdateLoading] = useState(false);
-  const [historySearchLoading, setHistorySearchLoading] = useState(false);
-  const [selectedDate, setSelectedDate] = useState(
+  const [workersLoading, setWorkersLoading] = useState(true);
+
+  const [viewMode, setViewMode] = useState("daily"); // "daily" | "history"
+
+  // ---- DAILY ENTRY STATE ----
+  const [dailyDate, setDailyDate] = useState(
     new Date().toISOString().split("T")[0]
   );
-  // History state
+  const [dailyWorkerId, setDailyWorkerId] = useState("");
+  const [dailyItemName, setDailyItemName] = useState("");
+  const [dailyPrice, setDailyPrice] = useState("");
+  const [dailyNote, setDailyNote] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  // ---- HISTORY STATE ----
+  const [historyFilter, setHistoryFilter] = useState("range"); // "range" | "single" | "worker"
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [history, setHistory] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
-  const [historyFilter, setHistoryFilter] = useState("range");
-  // "range" | "single" | "worker"
+  const [historySearchLoading, setHistorySearchLoading] = useState(false);
+  const [selectedWorkerFilter, setSelectedWorkerFilter] = useState(""); // for "worker" filter
 
-  // Accordion: which date sections are expanded
-  const [expandedDates, setExpandedDates] = useState({}); // {dateKey: true/false}
+  // Group expand/collapse
+  const [expandedDates, setExpandedDates] = useState({});
 
-  // Swipe-to-delete state
+  // ---- Swipe / Delete / Undo ----
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
-  const [swipeOffsets, setSwipeOffsets] = useState({}); // {attendanceId: offsetX}
-  const touchDataRef = useRef({}); // {attendanceId: {startX}}
+  const [deleting, setDeleting] = useState(false);
+  const [swipeOffsets, setSwipeOffsets] = useState({});
+  const touchDataRef = useRef({});
   const deleteTimeoutsRef = useRef({});
+  const pendingDeletesRef = useRef({});
 
-  // Long-press edit state
+  // ---- Edit modal ----
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [editingRecord, setEditingRecord] = useState(null);
   const [editForm, setEditForm] = useState({
-    startTime: "",
-    endTime: "",
-    rate: "",
-    restMinutes: 0,
-    missingMinutes: 0,
+    date: "",
+    itemName: "",
+    price: "",
     note: "",
-    remarks: "",
   });
+  const [updateLoading, setUpdateLoading] = useState(false);
   const longPressTimeoutRef = useRef(null);
 
-  const updateWorker = (id, field, value) => {
-    setWorkers((prev) =>
-      prev.map((worker) => {
-        if (applyToAll && worker.present) {
-          return { ...worker, [field]: value };
-        }
-        return worker._id === id ? { ...worker, [field]: value } : worker;
-      })
-    );
-  };
-
-  const handleSaveAttendance = async () => {
-    if (!selectedDate) {
-      return toast.error("Please select a date");
-    }
-
-    const entries = workers
-      .filter((w) => w.present)
-      .map((w) => ({
-        workerId: w._id,
-        date: selectedDate,
-        startTime: `${selectedDate}T${w.startTime}`,
-        endTime: `${selectedDate}T${w.endTime}`,
-        restMinutes: w.restMinutes || 0,
-        missingMinutes: w.missingMinutes || 0,
-        rate: w.rate,
-        note: w.note || "",
-        remarks: w.remarks || "",
-      }));
-
-    if (entries.length === 0) {
-      return toast.error("Mark at least one worker Present");
-    }
-
-    try {
-      setSaving(true);
-      for (const entry of entries) {
-        await api.post("/attendance/add", entry);
-      }
-      toast.success("Attendance saved successfully!");
-      resetAttendanceFields();
-    } catch (error) {
-      toast.error(error.response?.data?.msg || "Failed to save attendance");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const resetAttendanceFields = () => {
-    setWorkers((prev) =>
-      prev.map((w) => ({
-        ...w,
-        present: false,
-        startTime: "",
-        endTime: "",
-        restMinutes: 0,
-        missingMinutes: 0,
-        rate: "",
-      }))
-    );
-  };
+  // ---- Helpers ----
 
   const fetchWorkers = async () => {
     try {
       const res = await api.get("/workers");
       setWorkers(res.data.workers || []);
-    } catch (error) {
+    } catch (err) {
+      console.error(err);
       toast.error("Failed to load workers");
     } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchAttendanceHistory = async () => {
-    setHistorySearchLoading(true);
-    if (!startDate || !endDate) {
-      return toast.error("Select both start & end date!");
-    }
-    try {
-      setHistoryLoading(true);
-      const res = await api.get(
-        `/attendance/range?startDate=${startDate}&endDate=${endDate}`
-      );
-      const list = res.data.attendance || [];
-      setHistory(list);
-
-      const grouped = groupByDate(list);
-      const initialExpanded = {};
-      Object.keys(grouped).forEach((k) => {
-        initialExpanded[k] = true;
-      });
-      setExpandedDates(initialExpanded);
-    } catch (error) {
-      console.log(error);
-      toast.error("Failed to fetch attendance history");
-    } finally {
-      setHistoryLoading(false);
-      setHistorySearchLoading(false);
+      setWorkersLoading(false);
     }
   };
 
@@ -150,27 +69,18 @@ const AttendanceTab = () => {
     fetchWorkers();
   }, []);
 
-  // Apply first worker's data to all when Apply to All is toggled ON
-  useEffect(() => {
-    if (!applyToAll) return;
-
-    setWorkers((prev) => {
-      const first = prev[0];
-      if (!first) return prev;
-
-      return prev.map((w) => ({
-        ...w,
-        present: true,
-        startTime: first.startTime,
-        endTime: first.endTime,
-        rate: first.rate,
-      }));
-    });
-  }, [applyToAll]);
+  const getWorkerName = (workerId) => {
+    if (!workerId) return "Worker";
+    const id =
+      typeof workerId === "object" && workerId._id ? workerId._id : workerId;
+    const w = workers.find((wk) => wk._id === id);
+    return w?.name || "Worker";
+  };
 
   const groupByDate = (entries) => {
     const groups = {};
     entries.forEach((item) => {
+      if (!item.date) return;
       const dateKey = new Date(item.date).toLocaleDateString("en-IN", {
         day: "2-digit",
         month: "short",
@@ -189,14 +99,107 @@ const AttendanceTab = () => {
     }));
   };
 
-  const [deleting, setDeleting] = useState(false);
-  const [undoData, setUndoData] = useState(null);
+  // ---- DAILY: Create Extra ----
+  const handleSaveExtra = async () => {
+    if (!dailyWorkerId) return toast.error("Select a worker");
+    if (!dailyDate) return toast.error("Select a date");
+    if (!dailyItemName.trim()) return toast.error("Enter item name");
+    if (!dailyPrice || Number(dailyPrice) <= 0)
+      return toast.error("Enter a valid price");
 
-  // Local Trash Bin (multiple pending deletions supported)
-  const pendingDeletesRef = useRef({});
+    try {
+      setSaving(true);
+      await api.post("/extra", {
+        workerId: dailyWorkerId,
+        date: dailyDate,
+        itemName: dailyItemName.trim(),
+        price: Number(dailyPrice),
+        note: dailyNote || "",
+      });
 
-  // DELETE
-  const handleDeleteAttendance = (id) => {
+      toast.success("Extra saved successfully!");
+
+      // Reset only fields except worker + date
+      setDailyItemName("");
+      setDailyPrice("");
+      setDailyNote("");
+    } catch (err) {
+      console.error(err);
+      toast.error(err.response?.data?.msg || "Failed to save extra");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // ---- HISTORY: Fetch by Date Range (and reused for Single Day) ----
+  const fetchExtrasByDateRange = async () => {
+    if (!startDate || !endDate) {
+      toast.error("Select both start & end date!");
+      return;
+    }
+
+    setHistorySearchLoading(true);
+    setHistoryLoading(true);
+    try {
+      const res = await api.get(
+        `/extra?startDate=${startDate}&endDate=${endDate}`
+      );
+      const list = res.data.extras || [];
+      setHistory(list);
+
+      const grouped = groupByDate(list);
+      const initialExpanded = {};
+      Object.keys(grouped).forEach((k) => {
+        initialExpanded[k] = true;
+      });
+      setExpandedDates(initialExpanded);
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to fetch extras");
+    } finally {
+      setHistoryLoading(false);
+      setHistorySearchLoading(false);
+    }
+  };
+
+  // ---- HISTORY: Fetch by Worker (with optional date range filter on client) ----
+  const fetchExtrasByWorker = async () => {
+    if (!selectedWorkerFilter) return toast.error("Select a worker");
+
+    setHistorySearchLoading(true);
+    setHistoryLoading(true);
+
+    try {
+      const res = await api.get(`/extra/worker/${selectedWorkerFilter}`);
+      let list = res.data.extras || [];
+
+      if (startDate && endDate) {
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+        list = list.filter((item) => {
+          const d = new Date(item.date);
+          return d >= start && d <= end;
+        });
+      }
+
+      setHistory(list);
+      const grouped = groupByDate(list);
+      const initialExpanded = {};
+      Object.keys(grouped).forEach((k) => {
+        initialExpanded[k] = true;
+      });
+      setExpandedDates(initialExpanded);
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to fetch worker extras");
+    } finally {
+      setHistoryLoading(false);
+      setHistorySearchLoading(false);
+    }
+  };
+
+  // ---- DELETE + UNDO ----
+  const handleDeleteExtra = (id) => {
     const deletedItem = history.find((h) => h._id === id);
     if (!deletedItem) return;
 
@@ -208,26 +211,29 @@ const AttendanceTab = () => {
     showUndoToast(id);
 
     deleteTimeoutsRef.current[id] = setTimeout(async () => {
-      await api.delete(`/attendance/${id}`);
+      try {
+        await api.delete(`/extra/${id}`);
+      } catch (err) {
+        console.log("Server delete failed (extra):", err);
+      }
       delete pendingDeletesRef.current[id];
     }, 4000);
   };
 
-  // UNDO
   const handleUndoDelete = (id) => {
     const restoredOriginal = pendingDeletesRef.current[id];
     if (!restoredOriginal) return;
 
-    // 1️⃣ Cancel scheduled delete on server
+    // 1. Cancel the scheduled delete on the server
     if (deleteTimeoutsRef.current[id]) {
       clearTimeout(deleteTimeoutsRef.current[id]);
       deleteTimeoutsRef.current[id] = null;
     }
 
-    // 2️⃣ Put the original record back into UI
+    // 2. Put the original extra back into history list (UI)
     setHistory((prev) => [...prev, restoredOriginal]);
 
-    // 3️⃣ Ensure date group is expanded
+    // 3. Make sure its date group is expanded
     const dateKey = new Date(restoredOriginal.date).toLocaleDateString(
       "en-IN",
       {
@@ -238,11 +244,11 @@ const AttendanceTab = () => {
     );
     setExpandedDates((prev) => ({ ...prev, [dateKey]: true }));
 
-    // 4️⃣ Remove from local trash tracking
+    // 4. Clear from local trash
     delete pendingDeletesRef.current[id];
 
-    // 5️⃣ Toast
-    toast.info("Attendance restored", {
+    // 5. Nice toast
+    toast.info("Extra restored", {
       autoClose: 3000,
     });
   };
@@ -252,7 +258,7 @@ const AttendanceTab = () => {
       ({ closeToast }) => (
         <div className="flex items-center justify-between w-full">
           <span className="text-[13px] font-medium text-gray-800">
-            Attendance deleted
+            Extra deleted
           </span>
 
           <button
@@ -296,7 +302,6 @@ const AttendanceTab = () => {
       startOffset: currentOffset,
     };
 
-    // start long press timer
     startLongPress(id);
   };
 
@@ -307,14 +312,12 @@ const AttendanceTab = () => {
 
     const deltaX = touch.clientX - data.startX;
 
-    // if user is actually swiping, cancel long-press
     if (Math.abs(deltaX) > 5) {
       cancelLongPress();
     }
 
     let newOffset = data.startOffset + deltaX;
 
-    // clamp between fully closed (0) and fully open (-80)
     if (newOffset > 0) newOffset = 0;
     if (newOffset < -80) newOffset = -80;
 
@@ -326,8 +329,6 @@ const AttendanceTab = () => {
 
   const handleTouchEnd = (id) => {
     const offset = swipeOffsets[id] || 0;
-
-    // decide final position: open or closed
     const finalOffset = offset <= -40 ? -80 : 0;
 
     setSwipeOffsets((prev) => ({
@@ -347,7 +348,7 @@ const AttendanceTab = () => {
       if (record) {
         openEditModal(record);
       }
-    }, 700); // 700ms long press
+    }, 700);
   };
 
   const cancelLongPress = () => {
@@ -360,22 +361,15 @@ const AttendanceTab = () => {
   const openEditModal = (record) => {
     setEditingRecord(record);
 
-    const dateStr = new Date(record.date).toISOString().split("T")[0];
-
-    const toTimeInput = (iso) => {
-      const d = new Date(iso);
-      return d.toISOString().substring(11, 16); // HH:MM
-    };
+    const dateStr = record.date
+      ? new Date(record.date).toISOString().split("T")[0]
+      : "";
 
     setEditForm({
-      startTime: toTimeInput(record.startTime),
-      endTime: toTimeInput(record.endTime),
-      rate: record.rate,
-      restMinutes: record.restMinutes || 0,
-      missingMinutes: record.missingMinutes || 0,
+      date: dateStr,
+      itemName: record.itemName,
+      price: record.price,
       note: record.note || "",
-      remarks: record.remarks || "",
-      _dateStr: dateStr, // for later recomposition
     });
 
     setEditModalOpen(true);
@@ -390,33 +384,34 @@ const AttendanceTab = () => {
     setEditForm((prev) => ({ ...prev, [field]: value }));
   };
 
-  const handleUpdateAttendance = async () => {
-    setUpdateLoading(true);
+  const handleUpdateExtra = async () => {
     if (!editingRecord) return;
+    if (!editForm.itemName.trim()) return toast.error("Enter item name");
+    if (!editForm.price || Number(editForm.price) <= 0) {
+      return toast.error("Enter a valid price");
+    }
 
-    const dateStr = editForm._dateStr;
-    const payload = {
-      startTime: `${dateStr}T${editForm.startTime}`,
-      endTime: `${dateStr}T${editForm.endTime}`,
-      rate: editForm.rate,
-      restMinutes: editForm.restMinutes,
-      missingMinutes: editForm.missingMinutes,
-      note: editForm.note,
-      remarks: editForm.remarks,
-    };
+    setUpdateLoading(true);
 
     try {
-      const res = await api.put(`/attendance/${editingRecord._id}`, payload);
-      const updated = res.data.updatedAttendance;
+      const res = await api.put(`/extra/${editingRecord._id}`, {
+        date: editForm.date || editingRecord.date,
+        itemName: editForm.itemName.trim(),
+        price: Number(editForm.price),
+        note: editForm.note || "",
+      });
+
+      const updated = res.data.updatedExtra;
 
       setHistory((prev) =>
         prev.map((item) => (item._id === updated._id ? updated : item))
       );
-      toast.success("Attendance updated");
+
+      toast.success("Extra updated");
       closeEditModal();
     } catch (err) {
       console.error(err);
-      toast.error("Failed to update attendance");
+      toast.error("Failed to update extra");
     } finally {
       setUpdateLoading(false);
     }
@@ -434,7 +429,7 @@ const AttendanceTab = () => {
           }`}
           onClick={() => setViewMode("daily")}
         >
-          Daily Entry
+          Add Extra
         </button>
         <button
           className={`flex-1 py-2 rounded-md font-medium ${
@@ -451,157 +446,110 @@ const AttendanceTab = () => {
       {/* DAILY VIEW */}
       {viewMode === "daily" && (
         <div>
-          {/* Apply to All & Date */}
-          <div className="grid grid-cols-2 gap-4 items-center mb-4">
-            {/* Apply to all */}
-            <div className="flex items-center gap-2">
-              <label className="text-sm font-medium whitespace-nowrap">
-                Apply to all
-              </label>
-              <label className="toggle-switch">
-                <input
-                  type="checkbox"
-                  checked={applyToAll}
-                  onChange={(e) => setApplyToAll(e.target.checked)}
-                />
-                <span className="toggle-slider"></span>
-              </label>
+          {/* Worker + Date */}
+          <div className="grid grid-cols-1 gap-4 mb-4">
+            <div className="flex flex-col gap-1">
+              <label className="text-sm font-medium">Worker</label>
+              {workersLoading ? (
+                <div className="flex items-center gap-2 text-gray-500 text-sm">
+                  <Loader className="w-4 h-4 animate-spin" />
+                  Loading workers...
+                </div>
+              ) : (
+                <select
+                  value={dailyWorkerId}
+                  onChange={(e) => setDailyWorkerId(e.target.value)}
+                  className="border rounded-lg p-2 text-sm focus:outline-none focus:border-[var(--primary)]"
+                >
+                  <option value="">Select worker</option>
+                  {workers.map((w) => (
+                    <option key={w._id} value={w._id}>
+                      {w.name}
+                    </option>
+                  ))}
+                </select>
+              )}
             </div>
 
-            {/* Date */}
-            <div className="flex flex-col items-end">
-              <label className="text-sm font-medium mr-1">Date</label>
+            <div className="flex flex-col gap-1">
+              <label className="text-sm font-medium">Date</label>
               <input
                 type="date"
-                value={selectedDate}
-                onChange={(e) => setSelectedDate(e.target.value)}
-                className="border focus:outline-none px-2 py-1 rounded text-sm mt-1"
+                value={dailyDate}
+                onChange={(e) => setDailyDate(e.target.value)}
+                className="border rounded-lg p-2 text-sm focus:outline-none focus:border-[var(--primary)]"
               />
             </div>
           </div>
 
-          {loading ? (
-            <div className="flex justify-center py-10">
-              <Loader className="w-10 h-10 animate-spin primary-font" />
+          {/* Item + Price + Note */}
+          <div className="space-y-3">
+            <div className="flex flex-col gap-1">
+              <label className="text-sm font-medium">Item name</label>
+              <input
+                type="text"
+                value={dailyItemName}
+                onChange={(e) => setDailyItemName(e.target.value)}
+                placeholder="Wheat bag, seeds, etc."
+                className="border rounded-lg p-2 text-sm focus:outline-none focus:border-[var(--primary)]"
+              />
             </div>
-          ) : workers.length === 0 ? (
-            <p className="text-gray-500">No workers added yet.</p>
-          ) : (
-            <div className="space-y-4">
-              {workers.map((w) => {
-                const hours =
-                  w.startTime && w.endTime
-                    ? (
-                        (new Date(`2000-01-01T${w.endTime}`) -
-                          new Date(`2000-01-01T${w.startTime}`)) /
-                        (1000 * 60 * 60)
-                      ).toFixed(2)
-                    : "--";
 
-                const total =
-                  hours !== "--" && w.rate ? (hours * w.rate).toFixed(2) : "--";
-
-                return (
-                  <div
-                    key={w._id}
-                    className="bg-white shadow rounded-lg p-3 space-y-2"
-                  >
-                    <div className="flex justify-between items-center">
-                      <p className="font-semibold">{w.name}</p>
-                      <label className="text-xs flex items-center gap-1">
-                        Present
-                        <label className="toggle-switch">
-                          <input
-                            type="checkbox"
-                            checked={w.present || false}
-                            onChange={(e) =>
-                              updateWorker(w._id, "present", e.target.checked)
-                            }
-                          />
-                          <span className="toggle-slider"></span>
-                        </label>
-                      </label>
-                    </div>
-
-                    {/* Time */}
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="flex flex-col space-y-1">
-                        <label className="text-xs font-medium">Start</label>
-                        <input
-                          type="time"
-                          value={w.startTime || ""}
-                          onChange={(e) =>
-                            updateWorker(w._id, "startTime", e.target.value)
-                          }
-                          className="border focus:outline-none p-2 rounded text-sm max-w-[120px] focus:border-[var(--primary)]"
-                        />
-                      </div>
-
-                      <div className="flex flex-col space-y-1 items-end">
-                        <label className="text-xs font-medium">End</label>
-                        <input
-                          type="time"
-                          value={w.endTime || ""}
-                          onChange={(e) =>
-                            updateWorker(w._id, "endTime", e.target.value)
-                          }
-                          className="border focus:outline-none p-2 rounded text-sm max-w-[120px] focus:border-[var(--primary)]"
-                        />
-                      </div>
-                    </div>
-
-                    {/* Rate */}
-                    <div className="flex flex-col space-y-1">
-                      <input
-                        type="number"
-                        min="0"
-                        placeholder="Rate (₹)"
-                        value={w.rate || ""}
-                        onChange={(e) =>
-                          updateWorker(w._id, "rate", Number(e.target.value))
-                        }
-                        className="border focus:outline-none p-2 rounded text-sm w-full focus:border-[var(--primary)]"
-                      />
-                    </div>
-
-                    {/* Calculations */}
-                    <div className="mt-2 flex justify-between text-sm text-gray-500">
-                      <p>Hours: {hours}</p>
-                      <p>Total: ₹ {total}</p>
-                    </div>
-                  </div>
-                );
-              })}
+            <div className="flex flex-col gap-1">
+              <label className="text-sm font-medium">Price (₹)</label>
+              <input
+                type="number"
+                min="0"
+                value={dailyPrice}
+                onChange={(e) => setDailyPrice(e.target.value)}
+                placeholder="Enter price"
+                className="border rounded-lg p-2 text-sm focus:outline-none focus:border-[var(--primary)]"
+              />
             </div>
-          )}
+
+            <div className="flex flex-col gap-1">
+              <label className="text-sm font-medium">Note (optional)</label>
+              <input
+                type="text"
+                value={dailyNote}
+                onChange={(e) => setDailyNote(e.target.value)}
+                placeholder="Any extra detail"
+                className="border rounded-lg p-2 text-sm focus:outline-none focus:border-[var(--primary)]"
+              />
+            </div>
+          </div>
 
           {/* Save Button */}
           <button
             className={`w-full mt-5 py-3 rounded-lg text-white font-bold ${
               saving ? "bg-orange-300" : "primary-bg"
-            }`}
-            onClick={handleSaveAttendance}
+            } flex items-center justify-center gap-2`}
+            onClick={handleSaveExtra}
             disabled={saving}
           >
-            {saving ? "Saving..." : "Save Attendance"}
+            {saving ? (
+              <>
+                <Loader className="w-4 h-4 animate-spin" />
+                Saving...
+              </>
+            ) : (
+              "Save Extra"
+            )}
           </button>
         </div>
       )}
 
-      {/* HISTORY TAB */}
+      {/* HISTORY VIEW */}
       {viewMode === "history" && (
         <div className="space-y-4">
           {/* Filters Card */}
           <div className="bg-white rounded-xl p-4 shadow-md border border-gray-100">
-            <p className="text-sm font-semibold text-gray-800">
-              View Attendance
-            </p>
-            {/* Filter Segmented Control */}
-            <div className="relative bg-white/70 backdrop-blur-md shadow-sm border border-gray-100 rounded-full p-1 flex items-center justify-between gap-1">
-              {/* Sliding active background */}
+            <p className="text-sm font-semibold text-gray-800">View Extras</p>
+
+            {/* Segmented control */}
+            <div className="relative bg-white/70 backdrop-blur-md shadow-sm border border-gray-100 rounded-full p-1 flex items-center justify-between gap-1 mt-2">
               <div
-                className={`absolute top-1 bottom-1 w-1/3 rounded-full transition-all duration-300
-      bg-gradient-to-r  primary-bg shadow-md`}
+                className={`absolute top-1 bottom-1 w-1/3 rounded-full transition-all duration-300 primary-bg shadow-md`}
                 style={{
                   left:
                     historyFilter === "range"
@@ -612,7 +560,6 @@ const AttendanceTab = () => {
                 }}
               />
 
-              {/* Option: Date Range */}
               <button
                 className={`relative z-10 flex-1 py-2 text-xs font-semibold rounded-full transition-colors duration-300 ${
                   historyFilter === "range" ? "text-white" : "text-gray-600"
@@ -622,7 +569,6 @@ const AttendanceTab = () => {
                 Date Range
               </button>
 
-              {/* Option: Single Day */}
               <button
                 className={`relative z-10 flex-1 py-2 text-xs font-semibold rounded-full transition-colors duration-300 ${
                   historyFilter === "single" ? "text-white" : "text-gray-600"
@@ -636,7 +582,6 @@ const AttendanceTab = () => {
                 Single Day
               </button>
 
-              {/* Option: Worker */}
               <button
                 className={`relative z-10 flex-1 py-2 text-xs font-semibold rounded-full transition-colors duration-300 ${
                   historyFilter === "worker" ? "text-white" : "text-gray-600"
@@ -654,10 +599,10 @@ const AttendanceTab = () => {
             {/* Dynamic Filters */}
             <div className="bg-white mt-3 rounded-xl p-4 shadow-md border border-gray-100">
               <p className="text-sm font-semibold text-gray-800 mb-3">
-                Filter Attendance
+                Filter Extras
               </p>
 
-              {/* Date Range Filter */}
+              {/* Date Range */}
               {historyFilter === "range" && (
                 <div className="grid grid-cols-2 gap-3">
                   <input
@@ -674,12 +619,14 @@ const AttendanceTab = () => {
                   />
 
                   <button
-                    onClick={fetchAttendanceHistory}
+                    onClick={fetchExtrasByDateRange}
                     disabled={historySearchLoading}
                     className={`primary-bg text-white px-4 py-2 rounded text-sm col-span-2 
-              flex items-center justify-center gap-2 transition ${
-                historySearchLoading ? "opacity-70 cursor-not-allowed" : ""
-              }`}
+                      flex items-center justify-center gap-2 transition ${
+                        historySearchLoading
+                          ? "opacity-70 cursor-not-allowed"
+                          : ""
+                      }`}
                   >
                     {historySearchLoading ? (
                       <>
@@ -693,7 +640,7 @@ const AttendanceTab = () => {
                 </div>
               )}
 
-              {/* Single Day Filter */}
+              {/* Single Day */}
               {historyFilter === "single" && (
                 <div className="flex flex-col gap-3">
                   <input
@@ -709,13 +656,15 @@ const AttendanceTab = () => {
                   <button
                     onClick={() => {
                       if (!startDate) return toast.error("Pick a date!");
-                      fetchAttendanceHistory();
+                      fetchExtrasByDateRange();
                     }}
                     disabled={historySearchLoading}
                     className={`primary-bg text-white px-4 py-2 rounded-lg text-sm font-semibold 
-              flex items-center justify-center gap-2 ${
-                historySearchLoading ? "opacity-70 cursor-not-allowed" : ""
-              }`}
+                      flex items-center justify-center gap-2 ${
+                        historySearchLoading
+                          ? "opacity-70 cursor-not-allowed"
+                          : ""
+                      }`}
                   >
                     {historySearchLoading ? (
                       <>
@@ -729,12 +678,13 @@ const AttendanceTab = () => {
                 </div>
               )}
 
-              {/* Worker Filter (With Date Range Option) */}
+              {/* Worker filter */}
               {historyFilter === "worker" && (
                 <div className="space-y-3">
                   <select
                     className="border rounded-lg p-2 text-sm w-full focus:outline-none focus:border-[var(--primary)]"
-                    onChange={(e) => setEditingRecord(e.target.value)}
+                    value={selectedWorkerFilter}
+                    onChange={(e) => setSelectedWorkerFilter(e.target.value)}
                   >
                     <option value="">Select Worker</option>
                     {workers.map((w) => (
@@ -760,43 +710,14 @@ const AttendanceTab = () => {
                   </div>
 
                   <button
-                    onClick={async () => {
-                      if (!editingRecord) return toast.error("Select worker!");
-
-                      setHistorySearchLoading(true);
-
-                      try {
-                        const res = await api.get(
-                          `/attendance/worker/${editingRecord}`
-                        );
-                        let list = res.data.attendance || [];
-
-                        if (startDate && endDate) {
-                          list = list.filter(
-                            (item) =>
-                              new Date(item.date) >= new Date(startDate) &&
-                              new Date(item.date) <= new Date(endDate)
-                          );
-                        }
-
-                        setHistory(list);
-                        setExpandedDates(
-                          Object.keys(groupByDate(list)).reduce((a, b) => {
-                            a[b] = true;
-                            return a;
-                          }, {})
-                        );
-                      } catch (err) {
-                        toast.error("Failed to fetch worker attendance");
-                      } finally {
-                        setHistorySearchLoading(false);
-                      }
-                    }}
+                    onClick={fetchExtrasByWorker}
                     disabled={historySearchLoading}
                     className={`primary-bg text-white px-4 py-2 rounded-lg text-sm font-semibold 
-              w-full flex items-center justify-center gap-2 ${
-                historySearchLoading ? "opacity-70 cursor-not-allowed" : ""
-              }`}
+                      w-full flex items-center justify-center gap-2 ${
+                        historySearchLoading
+                          ? "opacity-70 cursor-not-allowed"
+                          : ""
+                      }`}
                   >
                     {historySearchLoading ? (
                       <>
@@ -820,7 +741,7 @@ const AttendanceTab = () => {
 
           {!historyLoading && history.length === 0 && (
             <p className="text-gray-500 text-center text-sm">
-              No attendance found.
+              No extras found.
             </p>
           )}
 
@@ -828,11 +749,8 @@ const AttendanceTab = () => {
           {!historyLoading &&
             history.length > 0 &&
             Object.entries(groupByDate(history)).map(([dateKey, records]) => {
-              const totalHours = records
-                .reduce((sum, r) => sum + (r.hoursWorked || 0), 0)
-                .toFixed(1);
-              const totalAmount = records
-                .reduce((sum, r) => sum + (r.total || 0), 0)
+              const totalPrice = records
+                .reduce((sum, r) => sum + (r.price || 0), 0)
                 .toFixed(2);
 
               const isExpanded = expandedDates[dateKey];
@@ -843,12 +761,10 @@ const AttendanceTab = () => {
                   className="bg-white shadow-lg rounded-2xl p-4 border border-gray-100 space-y-3"
                 >
                   {/* Header / Accordion Toggle */}
-                  {/* Header / Accordion Toggle */}
                   <div
                     className="flex items-center justify-between px-1"
                     onClick={() => toggleDateExpand(dateKey)}
                   >
-                    {/* Left: Calendar + Date */}
                     <div className="flex items-center gap-2">
                       <Calendar className="w-4 h-4 text-[var(--primary)]" />
                       <p className="font-semibold text-gray-800 text-[15px]">
@@ -856,13 +772,10 @@ const AttendanceTab = () => {
                       </p>
                     </div>
 
-                    {/* Right: Total + Toggle */}
                     <div className="flex items-center gap-3">
                       <p className="text-xs text-gray-600 font-semibold whitespace-nowrap">
-                        {totalHours}h • ₹{totalAmount}
+                        ₹{totalPrice}
                       </p>
-
-                      {/* Expand / Collapse Icon */}
                       {isExpanded ? (
                         <ChevronUp className="w-4 h-4 text-gray-600" />
                       ) : (
@@ -881,7 +794,7 @@ const AttendanceTab = () => {
                   >
                     <div className="mt-3 space-y-3">
                       {records.map((item) => {
-                        const name = item.workerId?.name || "Worker";
+                        const name = getWorkerName(item.workerId);
                         const initials = name
                           .split(" ")
                           .map((n) => n[0])
@@ -905,7 +818,7 @@ const AttendanceTab = () => {
                               </button>
                             </div>
 
-                            {/* Foreground card - touch/swipe/long press */}
+                            {/* Foreground card */}
                             <div
                               className="bg-gray-50 border border-gray-200 p-3 flex items-center justify-between rounded-xl shadow-sm transition-transform duration-200 ease-out no-select"
                               style={{
@@ -923,7 +836,6 @@ const AttendanceTab = () => {
                               onMouseLeave={cancelLongPress}
                             >
                               <div className="flex items-center gap-3">
-                                {/* Avatar */}
                                 <div className="w-9 h-9 rounded-full primary-bg text-white flex items-center justify-center font-semibold text-xs shrink-0">
                                   {initials}
                                 </div>
@@ -932,14 +844,19 @@ const AttendanceTab = () => {
                                   <p className="font-medium text-gray-700 text-sm leading-tight">
                                     {name}
                                   </p>
-                                  <span className="text-[11px] text-gray-500 flex items-center gap-1">
-                                    <span>✔</span> Present
+                                  <span className="text-[11px] text-gray-600 font-medium">
+                                    {item.itemName}
                                   </span>
+                                  {item.note && (
+                                    <span className="text-[11px] text-gray-500">
+                                      {item.note}
+                                    </span>
+                                  )}
                                 </div>
                               </div>
 
                               <span className="text-gray-700 font-semibold text-sm whitespace-nowrap">
-                                {item.hoursWorked}h • ₹{item.total}
+                                ₹{item.price}
                               </span>
                             </div>
                           </div>
@@ -952,80 +869,51 @@ const AttendanceTab = () => {
             })}
         </div>
       )}
+
       {/* EDIT MODAL */}
       {editModalOpen && (
         <div className="fixed inset-0 backdrop-blur-sm bg-black/40 flex items-center justify-center z-50">
           <div className="bg-white rounded-2xl shadow-xl w-[90%] max-w-md p-4 space-y-3">
             <div className="flex justify-between items-center mb-1">
               <h2 className="font-semibold text-gray-800 text-base">
-                Edit Attendance
+                Edit Extra
               </h2>
               <button onClick={closeEditModal}>
                 <X className="w-4 h-4 text-gray-500" />
               </button>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div className="flex flex-col gap-1">
-                <label className="text-xs text-gray-600">Start Time</label>
-                <input
-                  type="time"
-                  value={editForm.startTime}
-                  onChange={(e) =>
-                    handleEditChange("startTime", e.target.value)
-                  }
-                  className="border rounded-md p-2 text-sm focus:outline-none focus:border-[var(--primary)]"
-                />
-              </div>
-              <div className="flex flex-col gap-1">
-                <label className="text-xs text-gray-600">End Time</label>
-                <input
-                  type="time"
-                  value={editForm.endTime}
-                  onChange={(e) => handleEditChange("endTime", e.target.value)}
-                  className="border rounded-md p-2 text-sm focus:outline-none focus:border-[var(--primary)]"
-                />
-              </div>
-            </div>
-
             <div className="flex flex-col gap-1">
-              <label className="text-xs text-gray-600">Rate (₹)</label>
+              <label className="text-xs text-gray-600">Date</label>
               <input
-                type="number"
-                min="0"
-                value={editForm.rate}
-                onChange={(e) =>
-                  handleEditChange("rate", Number(e.target.value))
-                }
+                type="date"
+                value={editForm.date}
+                onChange={(e) => handleEditChange("date", e.target.value)}
                 className="border rounded-md p-2 text-sm focus:outline-none focus:border-[var(--primary)]"
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div className="flex flex-col gap-1">
-                <label className="text-xs text-gray-600">Rest (mins)</label>
-                <input
-                  type="number"
-                  min="0"
-                  value={editForm.restMinutes}
-                  onChange={(e) =>
-                    handleEditChange("restMinutes", Number(e.target.value))
-                  }
-                  className="border rounded-md p-2 text-sm focus:outline-none focus:border-[var(--primary)]"
-                />
-              </div>
-              <div className="flex flex-col gap-1">
-                <label className="text-xs text-gray-600">Missing (mins)</label>
-                <input
-                  type="number"
-                  min="0"
-                  value={editForm.missingMinutes}
-                  onChange={(e) =>
-                    handleEditChange("missingMinutes", Number(e.target.value))
-                  }
-                  className="border rounded-md p-2 text-sm focus:outline-none focus:border-[var(--primary)]"
-                />
-              </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs text-gray-600">Item name</label>
+              <input
+                type="text"
+                value={editForm.itemName}
+                onChange={(e) => handleEditChange("itemName", e.target.value)}
+                className="border rounded-md p-2 text-sm focus:outline-none focus:border-[var(--primary)]"
+              />
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label className="text-xs text-gray-600">Price (₹)</label>
+              <input
+                type="number"
+                min="0"
+                value={editForm.price}
+                onChange={(e) =>
+                  handleEditChange("price", Number(e.target.value))
+                }
+                className="border rounded-md p-2 text-sm focus:outline-none focus:border-[var(--primary)]"
+              />
             </div>
 
             <div className="flex flex-col gap-1">
@@ -1038,25 +926,18 @@ const AttendanceTab = () => {
               />
             </div>
 
-            <div className="flex flex-col gap-1">
-              <label className="text-xs text-gray-600">Remarks</label>
-              <input
-                type="text"
-                value={editForm.remarks}
-                onChange={(e) => handleEditChange("remarks", e.target.value)}
-                className="border rounded-md p-2 text-sm focus:outline-none focus:border-[var(--primary)]"
-              />
-            </div>
-
             <button
-              onClick={handleUpdateAttendance}
+              onClick={handleUpdateExtra}
               disabled={updateLoading}
               className={`primary-bg text-white px-4 py-2 rounded w-full flex items-center justify-center gap-2 transition ${
                 updateLoading ? "opacity-70 cursor-not-allowed" : ""
               }`}
             >
               {updateLoading ? (
-                <Loader className="animate-spin" size={18} />
+                <>
+                  <Loader className="w-4 h-4 animate-spin" />
+                  Saving...
+                </>
               ) : (
                 "Save"
               )}
@@ -1065,11 +946,11 @@ const AttendanceTab = () => {
         </div>
       )}
 
-      {/* Delete Popup */}
+      {/* DELETE POPUP */}
       {confirmDeleteId && (
         <div className="fixed inset-0 backdrop-blur-sm bg-black/40 flex items-center justify-center z-50">
           <div className="bg-white rounded-2xl p-5 w-[85%] max-w-sm">
-            <p className="font-semibold text-gray-800">Delete attendance?</p>
+            <p className="font-semibold text-gray-800">Delete extra?</p>
             <p className="text-xs text-gray-500 mt-1">
               This action cannot be undone.
             </p>
@@ -1084,7 +965,7 @@ const AttendanceTab = () => {
               <button
                 className="px-4 py-2 rounded-lg bg-red-500 text-white flex items-center justify-center min-w-[70px]"
                 disabled={deleting}
-                onClick={() => handleDeleteAttendance(confirmDeleteId)}
+                onClick={() => handleDeleteExtra(confirmDeleteId)}
               >
                 {deleting ? (
                   <Loader className="w-4 h-4 animate-spin" />
@@ -1100,4 +981,4 @@ const AttendanceTab = () => {
   );
 };
 
-export default AttendanceTab;
+export default ExtrasTab;

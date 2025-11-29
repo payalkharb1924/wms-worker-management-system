@@ -6,6 +6,7 @@ import workerRoutes from "./routes/worker.route.js";
 import attendanceRoutes from "./routes/attendance.route.js";
 import advanceRoutes from "./routes/advance.route.js";
 import extraRoutes from "./routes/extra.route.js";
+import settlementRoutes from "./routes/settlement.route.js";
 import cors from "cors";
 
 env.config();
@@ -31,6 +32,7 @@ app.use("/api/workers", workerRoutes);
 app.use("/api/attendance", attendanceRoutes);
 app.use("/api/advance", advanceRoutes);
 app.use("/api/extra", extraRoutes);
+app.use("/api/settlement", settlementRoutes);
 
 app.listen(PORT, () => {
   console.log(`✅ Server running on port ` + PORT);

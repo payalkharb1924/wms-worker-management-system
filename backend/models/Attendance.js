@@ -48,6 +48,15 @@ const AttendanceSchema = new mongoose.Schema(
       type: String,
       default: "",
     },
+    isSettled: {
+      type: Boolean,
+      default: false,
+    },
+    settlementId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Settlement",
+      default: null,
+    },
   },
   { timestamps: true }
 );
