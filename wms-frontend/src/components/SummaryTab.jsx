@@ -1,334 +1,3 @@
-// // src/components/SummaryTab.jsx
-// import React, { useEffect, useMemo, useState } from "react";
-// import api from "../api/axios";
-// import { Search, Calendar, ArrowRight, X, Loader } from "lucide-react";
-// import { toast } from "react-toastify";
-
-// const SummaryTab = () => {
-//   const [viewMode, setViewMode] = useState("history");
-//   const [settlements, setSettlements] = useState([]);
-//   const [loading, setLoading] = useState(true);
-//   const [searchTerm, setSearchTerm] = useState("");
-//   const [selectedSettlement, setSelectedSettlement] = useState(null);
-//   const [modalOpen, setModalOpen] = useState(false);
-
-//   const fetchSettlements = async () => {
-//     try {
-//       setLoading(true);
-//       const res = await api.get("/settlement/farmer/history");
-//       setSettlements(res.data.settlements || []);
-//     } catch (err) {
-//       toast.error("Failed to load settlements");
-//     } finally {
-//       setLoading(false);
-//     }
-//   };
-
-//   useEffect(() => {
-//     fetchSettlements();
-//   }, []);
-
-//   const sameDay = (d1, d2) =>
-//     new Date(d1).toDateString() === new Date(d2).toDateString();
-
-//   const formatShortDate = (d) =>
-//     new Date(d).toLocaleDateString("en-IN", {
-//       day: "2-digit",
-//       month: "short",
-//       year: "numeric",
-//     });
-
-//   const formatTime = (d) =>
-//     new Date(d).toLocaleTimeString("en-IN", {
-//       hour: "2-digit",
-//       minute: "2-digit",
-//     });
-
-//   const getDayLabel = (dateStr) => {
-//     const d = new Date(dateStr);
-//     const today = new Date();
-//     const yesterday = new Date();
-//     yesterday.setDate(today.getDate() - 1);
-
-//     if (sameDay(d, today)) return "Today";
-//     if (sameDay(d, yesterday)) return "Yesterday";
-//     return formatShortDate(dateStr);
-//   };
-
-//   const getInitials = (name = "") =>
-//     name
-//       .trim()
-//       .split(" ")
-//       .map((n) => n[0])
-//       .join("")
-//       .toUpperCase();
-
-//   const filteredSettlements = useMemo(() => {
-//     const term = searchTerm.trim().toLowerCase();
-//     if (!term) return settlements;
-
-//     return settlements.filter((s) => {
-//       const workerName = s.workerId?.name || "";
-//       const note = s.note || "";
-//       const blob = [
-//         workerName,
-//         note,
-//         s.netAmount,
-//         s.attendanceTotal,
-//         s.advancesTotal,
-//         s.extrasTotal,
-//         formatShortDate(s.startDate),
-//         formatShortDate(s.endDate),
-//         formatShortDate(s.createdAt),
-//       ]
-//         .join(" ")
-//         .toLowerCase();
-
-//       return blob.includes(term);
-//     });
-//   }, [settlements, searchTerm]);
-
-//   const groupedByDay = useMemo(() => {
-//     const groups = {};
-//     filteredSettlements.forEach((s) => {
-//       const baseDate = s.createdAt || s.endDate || s.startDate;
-//       if (!baseDate) return;
-
-//       const d = new Date(baseDate);
-//       d.setHours(0, 0, 0, 0);
-//       const key = d.toISOString();
-
-//       if (!groups[key]) groups[key] = [];
-//       groups[key].push(s);
-//     });
-
-//     return {
-//       groups,
-//       sortedKeys: Object.keys(groups).sort((a, b) => new Date(b) - new Date(a)),
-//     };
-//   }, [filteredSettlements]);
-
-//   const openModal = (s) => {
-//     setSelectedSettlement(s);
-//     setModalOpen(true);
-//   };
-
-//   const closeModal = () => {
-//     setModalOpen(false);
-//     setSelectedSettlement(null);
-//   };
-
-//   return (
-//     <div className="pb-10">
-//       {/* Tabs */}
-//       <div className="flex gap-2 mb-4">
-//         <button
-//           className={`flex-1 py-2 rounded-xl text-sm font-semibold ${
-//             viewMode === "history"
-//               ? "primary-bg text-white shadow"
-//               : "bg-gray-200/80 text-gray-700"
-//           }`}
-//           onClick={() => setViewMode("history")}
-//         >
-//           Settlement History
-//         </button>
-//         <button
-//           className={`flex-1 py-2 rounded-xl text-sm font-semibold ${
-//             viewMode === "insights"
-//               ? "primary-bg text-white shadow"
-//               : "bg-gray-200/80 text-gray-700"
-//           }`}
-//           onClick={() => setViewMode("insights")}
-//         >
-//           Insights (soon)
-//         </button>
-//       </div>
-
-//       {/* HISTORY */}
-//       {viewMode === "history" && (
-//         <div className="space-y-4">
-//           {/* Search */}
-//           <div className="rounded-xl p-[1px] bg-gradient-to-r from-gray-200/50 to-gray-100/50 shadow-sm">
-//             <div className="flex items-center gap-2 bg-white backdrop-blur-md px-3 py-2 rounded-xl border border-gray-200 shadow-sm">
-//               <Search className="w-4 h-4 text-gray-500" />
-//               <input
-//                 type="text"
-//                 placeholder="Search by worker, date, note, amount..."
-//                 className="w-full bg-transparent outline-none text-sm text-gray-700 placeholder:text-gray-400"
-//                 value={searchTerm}
-//                 onChange={(e) => setSearchTerm(e.target.value)}
-//               />
-//             </div>
-//           </div>
-
-//           {loading && (
-//             <div className="text-center py-10 text-gray-500 text-sm">
-//               <Loader className="w-6 h-6 mx-auto animate-spin mb-2" />
-//               Loading settlements...
-//             </div>
-//           )}
-
-//           {!loading &&
-//             filteredSettlements.length > 0 &&
-//             groupedByDay.sortedKeys.map((dayKey) => {
-//               const list = groupedByDay.groups[dayKey];
-//               return (
-//                 <div
-//                   key={dayKey}
-//                   className="bg-white rounded-xl p-3 shadow border border-gray-200"
-//                 >
-//                   {/* Day Header */}
-//                   <div className="flex items-center justify-between mb-2">
-//                     <div className="flex items-center gap-2">
-//                       <Calendar className="w-3.5 h-3.5 text-gray-600" />
-//                       <p className="text-xs font-semibold text-gray-700">
-//                         {getDayLabel(dayKey)}
-//                       </p>
-//                     </div>
-//                     <span className="text-[10px] text-gray-500 uppercase">
-//                       {list.length} settlement{list.length > 1 ? "s" : ""}
-//                     </span>
-//                   </div>
-
-//                   {/* Cards */}
-//                   <div className="space-y-2">
-//                     {list.map((s) => {
-//                       const worker = s.workerId?.name || "Worker";
-//                       return (
-//                         <button
-//                           key={s._id}
-//                           className="w-full text-left"
-//                           onClick={() => openModal(s)}
-//                         >
-//                           <div className="flex gap-3 items-center bg-white border border-gray-200 rounded-xl px-3 py-2 shadow-sm hover:shadow-md active:scale-[0.985] transition">
-//                             {/* Avatar */}
-//                             <div className="w-9 h-9 rounded-full bg-[var(--primary)] text-white flex items-center justify-center text-xs font-bold">
-//                               {getInitials(worker)}
-//                             </div>
-
-//                             {/* Info */}
-//                             <div className="flex-1 flex flex-col">
-//                               <div className="flex justify-between items-center">
-//                                 <p className="text-sm font-semibold text-gray-800 truncate">
-//                                   {worker}
-//                                 </p>
-//                                 <p className="text-sm font-bold text-green-600">
-//                                   ₹{s.netAmount.toFixed(2)}
-//                                 </p>
-//                               </div>
-//                               <p className="text-[11px] text-gray-500 truncate">
-//                                 {formatShortDate(s.startDate)} →{" "}
-//                                 {formatShortDate(s.endDate)}
-//                               </p>
-//                               <p className="text-[10px] text-gray-400 truncate">
-//                                 {s.note || "No note"} •{" "}
-//                                 {formatShortDate(s.createdAt)} at{" "}
-//                                 {formatTime(s.createdAt)}
-//                               </p>
-//                             </div>
-
-//                             <ArrowRight className="w-4 h-4 text-gray-400" />
-//                           </div>
-//                         </button>
-//                       );
-//                     })}
-//                   </div>
-//                 </div>
-//               );
-//             })}
-
-//           {!loading && filteredSettlements.length === 0 && (
-//             <p className="text-center text-gray-500 text-sm">
-//               No settlements found.
-//             </p>
-//           )}
-//         </div>
-//       )}
-
-//       {/* INSIGHTS Placeholder */}
-//       {viewMode === "insights" && (
-//         <div className="bg-white border border-gray-200 rounded-xl p-4 shadow text-center text-gray-600 mt-4">
-//           Insights coming soon 🚀
-//         </div>
-//       )}
-
-//       {/* MODAL */}
-//       {modalOpen && (
-//         <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 flex items-center justify-center">
-//           <div className="w-[90%] max-w-md bg-white rounded-3xl p-4 shadow-xl border border-gray-200">
-//             {/* Header */}
-//             <div className="flex justify-between items-center mb-2">
-//               <p className="text-xs uppercase font-semibold text-gray-500">
-//                 Settlement
-//               </p>
-//               <button
-//                 className="text-gray-500 hover:text-gray-700"
-//                 onClick={closeModal}
-//               >
-//                 <X className="w-4 h-4" />
-//               </button>
-//             </div>
-
-//             <h2 className="font-semibold text-gray-800 mb-3">
-//               {selectedSettlement.workerId?.name}
-//             </h2>
-
-//             {/* Period */}
-//             <div className="bg-gray-50 border border-gray-200 rounded-xl p-3 text-xs mb-3">
-//               <div className="flex justify-between font-medium text-gray-600">
-//                 <span>{formatShortDate(selectedSettlement.startDate)}</span>
-//                 <ArrowRight className="w-3.5 h-3.5 text-gray-500" />
-//                 <span>{formatShortDate(selectedSettlement.endDate)}</span>
-//               </div>
-//             </div>
-
-//             {/* Breakdown */}
-//             <div className="bg-gray-50 border border-gray-200 rounded-xl p-3 space-y-2 text-sm">
-//               <div className="flex justify-between text-gray-700">
-//                 <span>Attendance</span>
-//                 <span className="font-semibold">
-//                   ₹{selectedSettlement.attendanceTotal.toFixed(2)}
-//                 </span>
-//               </div>
-//               <div className="flex justify-between text-red-600">
-//                 <span>Advances</span>
-//                 <span className="font-semibold">
-//                   -₹{selectedSettlement.advancesTotal.toFixed(2)}
-//                 </span>
-//               </div>
-//               <div className="flex justify-between text-red-600">
-//                 <span>Extras</span>
-//                 <span className="font-semibold">
-//                   -₹{selectedSettlement.extrasTotal.toFixed(2)}
-//                 </span>
-//               </div>
-
-//               <div className="border-t border-gray-300 pt-2 flex justify-between font-bold text-green-600">
-//                 <span>Net Settled</span>
-//                 <span>₹{selectedSettlement.netAmount.toFixed(2)}</span>
-//               </div>
-//             </div>
-
-//             {/* Note */}
-//             <p className="text-[11px] text-gray-500 mt-3">
-//               <strong className="text-gray-700">Note:</strong>{" "}
-//               {selectedSettlement.note || "No note added"}
-//             </p>
-
-//             {/* Settled date */}
-//             <p className="text-[10px] text-gray-400 mt-1">
-//               Settled on {formatShortDate(selectedSettlement.createdAt)} at{" "}
-//               {formatTime(selectedSettlement.createdAt)}
-//             </p>
-//           </div>
-//         </div>
-//       )}
-//     </div>
-//   );
-// };
-
-// export default SummaryTab;
-
 // src/components/SummaryTab.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import api from "../api/axios";
@@ -353,6 +22,7 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
+  Legend,
 } from "recharts";
 
 const INSIGHT_OPTIONS = [
@@ -761,17 +431,17 @@ const SummaryTab = () => {
 
             {/* Insight selector – glass dropdown */}
             <div className="rounded-2xl p-[1px] bg-gradient-to-r from-gray-200 via-gray-100 to-gray-200 shadow">
-              <div className="relative flex items-center justify-between gap-2 px-3 py-2 rounded-2xl bg-white/80 backdrop-blur-lg border border-white/80">
+              <div className="relative flex items-center justify-between gap-2 px-3 py-2 rounded-2xl bg-white/80 backdrop-blur-lg border border-white/80 max-w-full">
                 <div className="flex flex-col">
-                  <span className="text-[11px] text-gray-500 uppercase tracking-wide">
+                  {/* <span className="text-[11px] text-gray-500 uppercase tracking-wide">
                     Insight
-                  </span>
-                  <span className="text-xs font-semibold text-gray-800">
+                  </span> */}
+                  {/* <span className="text-xs font-semibold text-gray-800">
                     {
                       INSIGHT_OPTIONS.find((o) => o.value === selectedInsight)
                         ?.label
                     }
-                  </span>
+                  </span> */}
                 </div>
 
                 <div className="relative">
@@ -809,7 +479,7 @@ const SummaryTab = () => {
           {!insightsLoading && insightsData && (
             <div className="rounded-3xl bg-white/85 border border-gray-200 shadow-[0_22px_60px_rgba(15,23,42,0.10)] p-3">
               {/* Responsive graph container */}
-              <div className="h-[260px]">
+              <div className="h-[300px]">
                 {selectedInsight === "pendingVsSettled" && (
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
@@ -819,6 +489,7 @@ const SummaryTab = () => {
                         innerRadius={55}
                         outerRadius={80}
                         paddingAngle={4}
+                        label
                       >
                         {pendingVsSettledData.map((entry, index) => (
                           <Cell
@@ -829,6 +500,11 @@ const SummaryTab = () => {
                           />
                         ))}
                       </Pie>
+                      <Legend
+                        verticalAlign="bottom"
+                        height={20}
+                        wrapperStyle={{ fontSize: "11px" }}
+                      />
                       <Tooltip content={<TinyTooltip />} />
                     </PieChart>
                   </ResponsiveContainer>
@@ -870,6 +546,7 @@ const SummaryTab = () => {
                         innerRadius={50}
                         outerRadius={80}
                         paddingAngle={3}
+                        label
                       >
                         {moneyBreakdownPieData.map((_, index) => (
                           <Cell
@@ -878,6 +555,11 @@ const SummaryTab = () => {
                           />
                         ))}
                       </Pie>
+                      <Legend
+                        verticalAlign="bottom"
+                        height={20}
+                        wrapperStyle={{ fontSize: "11px" }}
+                      />
                       <Tooltip content={<TinyTooltip />} />
                     </PieChart>
                   </ResponsiveContainer>
@@ -897,8 +579,17 @@ const SummaryTab = () => {
                         stroke="#9CA3AF"
                         width={55}
                       />
+                      <Legend
+                        verticalAlign="bottom"
+                        height={20}
+                        wrapperStyle={{ fontSize: "11px" }}
+                      />
                       <Tooltip content={<TinyTooltip />} />
-                      <Bar dataKey="totalNet" radius={[6, 6, 0, 0]} />
+                      <Bar
+                        dataKey="totalNet"
+                        radius={[6, 6, 0, 0]}
+                        fill="#FB923C"
+                      />
                     </BarChart>
                   </ResponsiveContainer>
                 )}
@@ -917,8 +608,17 @@ const SummaryTab = () => {
                         stroke="#9CA3AF"
                         width={45}
                       />
+                      <Legend
+                        verticalAlign="bottom"
+                        height={20}
+                        wrapperStyle={{ fontSize: "11px" }}
+                      />
                       <Tooltip content={<TinyTooltip />} />
-                      <Bar dataKey="hours" radius={[6, 6, 0, 0]} />
+                      <Bar
+                        dataKey="hours"
+                        radius={[6, 6, 0, 0]}
+                        fill="#FB923C"
+                      />
                     </BarChart>
                   </ResponsiveContainer>
                 )}
@@ -937,8 +637,17 @@ const SummaryTab = () => {
                         stroke="#9CA3AF"
                         width={55}
                       />
+                      <Legend
+                        verticalAlign="bottom"
+                        height={20}
+                        wrapperStyle={{ fontSize: "11px" }}
+                      />
                       <Tooltip content={<TinyTooltip />} />
-                      <Bar dataKey="netPending" radius={[6, 6, 0, 0]} />
+                      <Bar
+                        dataKey="netPending"
+                        radius={[6, 6, 0, 0]}
+                        fill="#FB923C"
+                      />
                     </BarChart>
                   </ResponsiveContainer>
                 )}
@@ -984,11 +693,20 @@ const SummaryTab = () => {
                         width={40}
                         domain={[0, 100]}
                       />
+                      <Legend
+                        verticalAlign="bottom"
+                        height={20}
+                        wrapperStyle={{ fontSize: "11px" }}
+                      />
                       <Tooltip
                         content={<TinyTooltip />}
                         formatter={(value) => `${value.toFixed(1)} %`}
                       />
-                      <Bar dataKey="reliability" radius={[6, 6, 0, 0]} />
+                      <Bar
+                        dataKey="reliability"
+                        radius={[6, 6, 0, 0]}
+                        fill="#FB923C"
+                      />
                     </BarChart>
                   </ResponsiveContainer>
                 )}
@@ -1007,8 +725,17 @@ const SummaryTab = () => {
                         stroke="#9CA3AF"
                         width={40}
                       />
+                      <Legend
+                        verticalAlign="bottom"
+                        height={20}
+                        wrapperStyle={{ fontSize: "11px" }}
+                      />
                       <Tooltip content={<TinyTooltip />} />
-                      <Bar dataKey="totalAdvances" radius={[6, 6, 0, 0]} />
+                      <Bar
+                        dataKey="totalAdvances"
+                        radius={[6, 6, 0, 0]}
+                        fill="#FB923C"
+                      />
                     </BarChart>
                   </ResponsiveContainer>
                 )}
