@@ -182,6 +182,23 @@ const AttendanceTab = () => {
     return groups;
   };
 
+  // UI helpers for settled records
+  const getCardStyle = (item) =>
+    item.isSettled
+      ? "bg-gray-300 border border-gray-300"
+      : "bg-gray-100 border border-gray-200";
+
+  const getBadge = (item) =>
+    item.isSettled ? (
+      <span className="text-[10px] bg-green-100 text-green-700 px-2 py-[2px] rounded-full">
+        Settled
+      </span>
+    ) : (
+      <span className="text-[10px] bg-yellow-100 text-yellow-700 px-2 py-[2px] rounded-full">
+        Pending
+      </span>
+    );
+
   const toggleDateExpand = (dateKey) => {
     setExpandedDates((prev) => ({
       ...prev,
@@ -707,9 +724,39 @@ const AttendanceTab = () => {
                   />
 
                   <button
-                    onClick={() => {
+                    onClick={async () => {
                       if (!startDate) return toast.error("Pick a date!");
-                      fetchAttendanceHistory();
+
+                      setHistorySearchLoading(true);
+
+                      try {
+                        const res = await api.get(
+                          `/attendance/range?startDate=${startDate}&endDate=${startDate}`
+                        );
+
+                        let list = res.data.attendance || [];
+
+                        // ⭐ FIX: Only keep exactly selected date ⭐
+                        const sameDay = (d1, d2) =>
+                          new Date(d1).toDateString() ===
+                          new Date(d2).toDateString();
+                        list = list.filter((item) =>
+                          sameDay(item.date, startDate)
+                        );
+
+                        setHistory(list);
+
+                        setExpandedDates(
+                          Object.keys(groupByDate(list)).reduce((acc, key) => {
+                            acc[key] = true;
+                            return acc;
+                          }, {})
+                        );
+                      } catch (error) {
+                        toast.error("Failed to fetch attendance");
+                      } finally {
+                        setHistorySearchLoading(false);
+                      }
                     }}
                     disabled={historySearchLoading}
                     className={`primary-bg text-white px-4 py-2 rounded-lg text-sm font-semibold 
@@ -895,50 +942,78 @@ const AttendanceTab = () => {
                             key={item._id}
                             className="relative overflow-hidden rounded-xl bg-red-500"
                           >
-                            {/* Delete background */}
-                            <div className="absolute inset-0 right-0 flex items-center justify-end overflow-hidden">
-                              <button
-                                className="w-20 h-full rounded-r-xl bg-red-500 shadow-lg text-white font-bold text-[13px] tracking-wide flex items-center justify-center active:scale-95"
-                                onClick={() => setConfirmDeleteId(item._id)}
-                              >
-                                Delete
-                              </button>
-                            </div>
+                            {/* Delete background (only if unsettled) */}
+                            {!item.isSettled && (
+                              <div className="absolute inset-0 right-0 flex items-center justify-end overflow-hidden">
+                                <button
+                                  className="w-20 h-full rounded-r-xl bg-red-500 text-white font-bold text-[13px] tracking-wide flex items-center justify-center active:scale-95"
+                                  onClick={() => setConfirmDeleteId(item._id)}
+                                >
+                                  Delete
+                                </button>
+                              </div>
+                            )}
 
                             {/* Foreground card - touch/swipe/long press */}
                             <div
-                              className="bg-gray-50 border border-gray-200 p-3 flex items-center justify-between rounded-xl shadow-sm transition-transform duration-200 ease-out no-select"
+                              className={`${getCardStyle(
+                                item
+                              )} p-3 flex items-start justify-between rounded-xl shadow-sm transition-transform duration-200 ease-out no-select relative`}
                               style={{
                                 transform: `translateX(${offset}px)`,
-                                transition:
-                                  "transform 0.25s cubic-bezier(0.22, 1, 0.36, 1)",
+                                pointerEvents: item.isSettled ? "none" : "auto",
                               }}
                               onTouchStart={(e) =>
-                                handleTouchStart(item._id, e)
+                                !item.isSettled && handleTouchStart(item._id, e)
                               }
-                              onTouchMove={(e) => handleTouchMove(item._id, e)}
-                              onTouchEnd={() => handleTouchEnd(item._id)}
-                              onMouseDown={() => startLongPress(item._id)}
+                              onTouchMove={(e) =>
+                                !item.isSettled && handleTouchMove(item._id, e)
+                              }
+                              onTouchEnd={() =>
+                                !item.isSettled && handleTouchEnd(item._id)
+                              }
+                              onMouseDown={() =>
+                                !item.isSettled && startLongPress(item._id)
+                              }
                               onMouseUp={cancelLongPress}
                               onMouseLeave={cancelLongPress}
                             >
+                              {/* BADGE TOP RIGHT */}
+                              {item.isSettled && (
+                                <span className="absolute bottom-2 right-2 text-[10px] bg-green-100 text-green-700 px-1.5 py-[1px] rounded-full">
+                                  Settled
+                                </span>
+                              )}
+
+                              {/* Avatar + Name */}
                               <div className="flex items-center gap-3">
-                                {/* Avatar */}
                                 <div className="w-9 h-9 rounded-full primary-bg text-white flex items-center justify-center font-semibold text-xs shrink-0">
                                   {initials}
                                 </div>
-
                                 <div className="flex flex-col">
-                                  <p className="font-medium text-gray-700 text-sm leading-tight">
+                                  <p
+                                    className={`font-medium text-sm leading-tight ${
+                                      item.isSettled
+                                        ? "text-gray-600"
+                                        : "text-gray-800"
+                                    }`}
+                                  >
                                     {name}
                                   </p>
-                                  <span className="text-[11px] text-gray-500 flex items-center gap-1">
-                                    <span>✔</span> Present
+                                  <span className="text-[11px] text-gray-500">
+                                    ✔ Present
                                   </span>
                                 </div>
                               </div>
 
-                              <span className="text-gray-700 font-semibold text-sm whitespace-nowrap">
+                              {/* Amount Right Side */}
+                              <span
+                                className={`font-semibold text-sm whitespace-nowrap ${
+                                  item.isSettled
+                                    ? "text-gray-600"
+                                    : "text-gray-800"
+                                }`}
+                              >
                                 {item.hoursWorked}h • ₹{item.total}
                               </span>
                             </div>

@@ -6,6 +6,7 @@ import WorkersTab from "../components/WorkersTab.jsx";
 import AttendanceTab from "../components/AttendanceTab.jsx";
 import AdvancesTab from "../components/AdvancesTab.jsx";
 import ExtrasTab from "../components/ExtrasTab.jsx";
+import SummaryTab from "../components/SummaryTab.jsx";
 
 const Dashboard = () => {
   const user = useSelector((state) => state.auth.user);
@@ -78,7 +79,7 @@ const Dashboard = () => {
         {activeTab === "Attendance" && <AttendanceTab />}
         {activeTab === "Advances" && <AdvancesTab />}
         {activeTab === "Extras" && <ExtrasTab />}
-        {activeTab === "Summary" && <div>Summary Content Here</div>}
+        {activeTab === "Summary" && <SummaryTab />}
       </div>
     </div>
   );

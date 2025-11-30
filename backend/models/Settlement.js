@@ -57,6 +57,8 @@ const SettlementSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+SettlementSchema.index({ farmerId: 1, createdAt: -1 });
+
 const Settlement = mongoose.model("Settlement", SettlementSchema);
 
 export default Settlement;

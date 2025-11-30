@@ -284,3 +284,25 @@ export const getWorkerSettlements = async (req, res) => {
     return res.status(500).json({ msg: "Error in getting worker settlements" });
   }
 };
+
+// ✅ 4. Get ALL settlements of this farmer (Summary tab – History)
+export const getFarmerSettlementsHistory = async (req, res) => {
+  try {
+    const farmerId = req.user.id;
+
+    const settlements = await Settlement.find({ farmerId })
+      .populate("workerId", "name")
+      .sort({ createdAt: -1 })
+      .lean();
+
+    return res.status(200).json({
+      msg: "Farmer settlements history fetched",
+      settlements,
+    });
+  } catch (error) {
+    console.log("Error in getFarmerSettlementsHistory", error);
+    return res
+      .status(500)
+      .json({ msg: "Error in getting settlements history" });
+  }
+};
