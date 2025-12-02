@@ -1,6 +1,7 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useSelector, useDispatch } from "react-redux";
 import { logout } from "../features/auth/authSlice.js";
+import { loadUser } from "../features/auth/authActions";
 import { useNavigate } from "react-router-dom";
 import WorkersTab from "../components/WorkersTab.jsx";
 import AttendanceTab from "../components/AttendanceTab.jsx";
@@ -9,7 +10,7 @@ import ExtrasTab from "../components/ExtrasTab.jsx";
 import SummaryTab from "../components/SummaryTab.jsx";
 
 const Dashboard = () => {
-  const user = useSelector((state) => state.auth.user);
+  const { user, token } = useSelector((state) => state.auth);
 
   const tabs = ["Workers", "Attendance", "Advances", "Extras", "Summary"];
 
@@ -19,13 +20,19 @@ const Dashboard = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
 
+  useEffect(() => {
+    if (!user && token) {
+      dispatch(loadUser());
+    }
+  }, [user, token, dispatch]);
+
   const handleLogout = () => {
     dispatch(logout());
     navigate("/login");
   };
 
   return (
-    <div className="min-h-screen primary-bg p-5 relative">
+    <div className="min-h-screen primary-bg p-5 flex flex-col">
       {/* Header */}
       <div className="flex justify-between items-center text-white mb-6">
         <div>
@@ -74,7 +81,10 @@ const Dashboard = () => {
       </div>
 
       {/* Content Area */}
-      <div className="bg-white mt-5 rounded-xl p-4 shadow-md min-h-[450px]">
+      <div
+        className="bg-white mt-5 rounded-xl p-4 shadow-md 
+  flex-1 overflow-y-auto max-h-[calc(100vh-190px)] relative scroll-smooth no-scrollbar min-h-[450px]"
+      >
         {activeTab === "Workers" && <WorkersTab />}
         {activeTab === "Attendance" && <AttendanceTab />}
         {activeTab === "Advances" && <AdvancesTab />}

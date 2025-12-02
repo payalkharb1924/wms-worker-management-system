@@ -44,6 +44,17 @@ const AttendanceTab = () => {
     remarks: "",
   });
   const longPressTimeoutRef = useRef(null);
+  const scrollRef = useRef(null);
+  const [showShadowTop, setShowShadowTop] = useState(false);
+  const [showShadowBottom, setShowShadowBottom] = useState(true);
+
+  const handleScrollShadow = () => {
+    const el = scrollRef.current;
+    if (!el) return;
+
+    setShowShadowTop(el.scrollTop > 5);
+    setShowShadowBottom(el.scrollTop + el.clientHeight < el.scrollHeight - 5);
+  };
 
   const updateWorker = (id, field, value) => {
     setWorkers((prev) =>
@@ -103,6 +114,8 @@ const AttendanceTab = () => {
         restMinutes: 0,
         missingMinutes: 0,
         rate: "",
+        note: "",
+        remarks: "",
       }))
     );
   };
@@ -164,6 +177,10 @@ const AttendanceTab = () => {
         startTime: first.startTime,
         endTime: first.endTime,
         rate: first.rate,
+        restMinutes: first.restMinutes,
+        missingMinutes: first.missingMinutes,
+        note: first.note,
+        remarks: first.remarks,
       }));
     });
   }, [applyToAll]);
@@ -504,30 +521,70 @@ const AttendanceTab = () => {
           ) : workers.length === 0 ? (
             <p className="text-gray-500">No workers added yet.</p>
           ) : (
-            <div className="space-y-4">
+            <div
+              className="space-y-4 overflow-y-auto no-scrollbar"
+              ref={scrollRef}
+              style={{
+                maxHeight: "calc(100vh - 240px)", // adjust if needed
+                scrollBehavior: "smooth",
+                paddingBottom: "70px",
+              }}
+              onScroll={handleScrollShadow}
+            >
               {workers.map((w) => {
-                const hours =
-                  w.startTime && w.endTime
-                    ? (
-                        (new Date(`2000-01-01T${w.endTime}`) -
-                          new Date(`2000-01-01T${w.startTime}`)) /
-                        (1000 * 60 * 60)
-                      ).toFixed(2)
-                    : "--";
+                let hours = "--";
+                if (w.startTime && w.endTime) {
+                  const start = new Date(`2000-01-01T${w.startTime}`);
+                  const end = new Date(`2000-01-01T${w.endTime}`);
+                  const workedMins = (end - start) / (1000 * 60);
+                  const effectiveMins =
+                    workedMins - (w.restMinutes || 0) - (w.missingMinutes || 0);
+                  hours =
+                    effectiveMins > 0
+                      ? (effectiveMins / 60).toFixed(2)
+                      : "0.00";
+                }
 
                 const total =
                   hours !== "--" && w.rate ? (hours * w.rate).toFixed(2) : "--";
 
+                const isExpanded = w.isExpanded ?? false;
+
                 return (
                   <div
+                    id={`worker-${w._id}`}
                     key={w._id}
-                    className="bg-white shadow rounded-lg p-3 space-y-2"
+                    className="bg-white shadow rounded-lg p-3 space-y-3 cursor-pointer transition-all"
+                    onClick={() => {
+                      setWorkers((prev) =>
+                        prev.map((x) =>
+                          x._id === w._id
+                            ? { ...x, isExpanded: !isExpanded }
+                            : { ...x, isExpanded: false }
+                        )
+                      );
+
+                      // 👇 Auto-scroll the expanded card into view
+                      setTimeout(() => {
+                        document
+                          .getElementById(`worker-${w._id}`)
+                          ?.scrollIntoView({
+                            behavior: "smooth",
+                            block: "nearest",
+                          });
+                      }, 150);
+                    }}
                   >
+                    {/* Header */}
                     <div className="flex justify-between items-center">
-                      <p className="font-semibold">{w.name}</p>
+                      <p className="font-semibold text-gray-800">{w.name}</p>
+
                       <label className="text-xs flex items-center gap-1">
                         Present
-                        <label className="toggle-switch">
+                        <label
+                          className="toggle-switch"
+                          onClick={(e) => e.stopPropagation()}
+                        >
                           <input
                             type="checkbox"
                             checked={w.present || false}
@@ -540,51 +597,145 @@ const AttendanceTab = () => {
                       </label>
                     </div>
 
-                    {/* Time */}
+                    {/* Always visible */}
                     <div className="grid grid-cols-2 gap-3">
-                      <div className="flex flex-col space-y-1">
-                        <label className="text-xs font-medium">Start</label>
+                      <div
+                        className="flex flex-col space-y-1"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <label className="text-[10px] text-gray-500">
+                          Start
+                        </label>
                         <input
                           type="time"
                           value={w.startTime || ""}
                           onChange={(e) =>
                             updateWorker(w._id, "startTime", e.target.value)
                           }
-                          className="border focus:outline-none p-2 rounded text-sm max-w-[120px] focus:border-[var(--primary)]"
+                          className="border focus:outline-none p-2 max-w-[120px] rounded text-sm focus:border-[var(--primary)]"
                         />
                       </div>
 
-                      <div className="flex flex-col space-y-1 items-end">
-                        <label className="text-xs font-medium">End</label>
+                      <div
+                        className="flex flex-col space-y-1"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <label className="text-[10px] text-gray-500">End</label>
                         <input
                           type="time"
                           value={w.endTime || ""}
                           onChange={(e) =>
                             updateWorker(w._id, "endTime", e.target.value)
                           }
-                          className="border focus:outline-none p-2 rounded text-sm max-w-[120px] focus:border-[var(--primary)]"
+                          className="border focus:outline-none p-2 max-w-[120px] rounded text-sm focus:border-[var(--primary)]"
                         />
                       </div>
                     </div>
 
-                    {/* Rate */}
-                    <div className="flex flex-col space-y-1">
-                      <input
-                        type="number"
-                        min="0"
-                        placeholder="Rate (₹)"
-                        value={w.rate || ""}
-                        onChange={(e) =>
-                          updateWorker(w._id, "rate", Number(e.target.value))
-                        }
-                        className="border focus:outline-none p-2 rounded text-sm w-full focus:border-[var(--primary)]"
-                      />
-                    </div>
+                    {/* EXPANDABLE ZONE */}
+                    <div
+                      className={`transition-all duration-300 overflow-hidden ${
+                        isExpanded
+                          ? "max-h-[500px] opacity-100"
+                          : "max-h-0 opacity-0"
+                      }`}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {/* Rate */}
+                      <div className="flex flex-col space-y-1 mt-2">
+                        <label className="text-[10px] text-gray-500">
+                          Rate (₹)
+                        </label>
+                        <input
+                          type="number"
+                          placeholder="Rate"
+                          min={0}
+                          value={w.rate || ""}
+                          onChange={(e) =>
+                            updateWorker(w._id, "rate", Number(e.target.value))
+                          }
+                          className="border p-2 rounded text-sm focus:border-[var(--primary)]"
+                        />
+                      </div>
 
-                    {/* Calculations */}
-                    <div className="mt-2 flex justify-between text-sm text-gray-500">
-                      <p>Hours: {hours}</p>
-                      <p>Total: ₹ {total}</p>
+                      {/* Rest & Missing */}
+                      <div className="grid grid-cols-2 gap-3 mt-2">
+                        <div className="flex flex-col space-y-1">
+                          <label className="text-[10px] text-gray-500">
+                            Rest Mins
+                          </label>
+                          <input
+                            type="number"
+                            min={0}
+                            value={w.restMinutes || 0}
+                            onChange={(e) =>
+                              updateWorker(
+                                w._id,
+                                "restMinutes",
+                                Number(e.target.value)
+                              )
+                            }
+                            className="border p-2 rounded text-sm focus:border-[var(--primary)]"
+                          />
+                        </div>
+
+                        <div className="flex flex-col space-y-1">
+                          <label className="text-[10px] text-gray-500">
+                            Missing Mins
+                          </label>
+                          <input
+                            type="number"
+                            min={0}
+                            value={w.missingMinutes || 0}
+                            onChange={(e) =>
+                              updateWorker(
+                                w._id,
+                                "missingMinutes",
+                                Number(e.target.value)
+                              )
+                            }
+                            className="border p-2 rounded text-sm focus:border-[var(--primary)]"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Note */}
+                      <div className="flex flex-col space-y-1 mt-2">
+                        <label className="text-[10px] text-gray-500">
+                          Note
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="Notes (optional)"
+                          value={w.note || ""}
+                          onChange={(e) =>
+                            updateWorker(w._id, "note", e.target.value)
+                          }
+                          className="border p-2 rounded text-sm focus:border-[var(--primary)]"
+                        />
+                      </div>
+
+                      {/* Remarks */}
+                      <div className="flex flex-col space-y-1 mt-2">
+                        <label className="text-[10px] text-gray-500">
+                          Remarks
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="Remarks"
+                          value={w.remarks || ""}
+                          onChange={(e) =>
+                            updateWorker(w._id, "remarks", e.target.value)
+                          }
+                          className="border p-2 rounded text-sm focus:border-[var(--primary)]"
+                        />
+                      </div>
+
+                      {/* Summary */}
+                      <div className="mt-2 flex justify-between text-sm text-gray-500">
+                        <span>Hours: {hours}</span>
+                        <span>Total: ₹ {total}</span>
+                      </div>
                     </div>
                   </div>
                 );
@@ -594,11 +745,10 @@ const AttendanceTab = () => {
 
           {/* Save Button */}
           <button
-            className={`w-full mt-5 py-3 rounded-lg text-white font-bold ${
-              saving ? "bg-orange-300" : "primary-bg"
-            }`}
+            className={`w-full py-3 rounded-lg text-white font-bold 
+  sticky bottom-8 z-10 mt-5 
+  ${saving ? "bg-orange-300" : "primary-bg"}`}
             onClick={handleSaveAttendance}
-            disabled={saving}
           >
             {saving ? "Saving..." : "Save Attendance"}
           </button>

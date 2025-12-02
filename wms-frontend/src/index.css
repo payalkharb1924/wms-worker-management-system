@@ -100,3 +100,48 @@ input:checked + .toggle-slider:before {
   -webkit-user-select: none;
   -webkit-touch-callout: none;
 }
+
+/* Cute Scrollbar */
+.custom-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+
+.custom-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scroll::-webkit-scrollbar-thumb {
+  background: var(--primary);
+  border-radius: 20px;
+}
+
+.custom-scroll::-webkit-scrollbar-thumb:hover {
+  background: #d24d00; /* darker hover */
+}
+
+/* Hide scrollbar in history inner cards */
+.scroll-hide::-webkit-scrollbar {
+  display: none;
+}
+
+/* Modern minimal scrollbar */
+.scrollbar-thin::-webkit-scrollbar {
+  width: 6px;
+  height: 12px;
+}
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: var(--primary);
+  border-radius: 50px;
+}
+
+/* Hide scrollbar everywhere */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
