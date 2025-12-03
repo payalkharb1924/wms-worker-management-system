@@ -74,17 +74,57 @@ const AttendanceTab = () => {
 
     const entries = workers
       .filter((w) => w.present)
-      .map((w) => ({
-        workerId: w._id,
-        date: selectedDate,
-        startTime: `${selectedDate}T${w.startTime}`,
-        endTime: `${selectedDate}T${w.endTime}`,
-        restMinutes: w.restMinutes || 0,
-        missingMinutes: w.missingMinutes || 0,
-        rate: w.rate,
-        note: w.note || "",
-        remarks: w.remarks || "",
-      }));
+      .map((w) => {
+        // 👉 If Hours Worked provided, auto-generate start/end (local, no timezone issues)
+        if (w.hoursWorked && w.hoursWorked > 0) {
+          const hours = Number(w.hoursWorked);
+
+          // Base start: 09:00
+          const startDate = new Date(2000, 0, 1, 9, 0); // year, monthIndex, day, hour, minute
+          const endDate = new Date(
+            startDate.getTime() + hours * 60 * 60 * 1000
+          );
+
+          const pad = (n) => n.toString().padStart(2, "0");
+
+          const startStr = `${pad(startDate.getHours())}:${pad(
+            startDate.getMinutes()
+          )}`;
+          const endStr = `${pad(endDate.getHours())}:${pad(
+            endDate.getMinutes()
+          )}`;
+
+          return {
+            workerId: w._id,
+            date: selectedDate,
+            startTime: `${selectedDate}T${startStr}`,
+            endTime: `${selectedDate}T${endStr}`,
+            hoursWorked: hours, // optional: for backend if it uses it
+            restMinutes: w.restMinutes || 0,
+            missingMinutes: w.missingMinutes || 0,
+            rate: w.rate,
+            note: w.note || "",
+            remarks: w.remarks || "",
+          };
+        }
+
+        // 👉 Otherwise, use actual start + end (fallback to 09:00 if missing)
+        return {
+          workerId: w._id,
+          date: selectedDate,
+          startTime: w.startTime
+            ? `${selectedDate}T${w.startTime}`
+            : `${selectedDate}T09:00`,
+          endTime: w.endTime
+            ? `${selectedDate}T${w.endTime}`
+            : `${selectedDate}T09:00`,
+          restMinutes: w.restMinutes || 0,
+          missingMinutes: w.missingMinutes || 0,
+          rate: w.rate,
+          note: w.note || "",
+          remarks: w.remarks || "",
+        };
+      });
 
     if (entries.length === 0) {
       return toast.error("Mark at least one worker Present");
@@ -533,7 +573,11 @@ const AttendanceTab = () => {
             >
               {workers.map((w) => {
                 let hours = "--";
-                if (w.startTime && w.endTime) {
+
+                if (w.hoursWorked && w.hoursWorked > 0) {
+                  // Direct input
+                  hours = Number(w.hoursWorked).toFixed(2);
+                } else if (w.startTime && w.endTime) {
                   const start = new Date(`2000-01-01T${w.startTime}`);
                   const end = new Date(`2000-01-01T${w.endTime}`);
                   const workedMins = (end - start) / (1000 * 60);
@@ -656,6 +700,31 @@ const AttendanceTab = () => {
                           }
                           className="border p-2 rounded text-sm focus:border-[var(--primary)]"
                         />
+                      </div>
+
+                      {/* Hours Worked (Direct input alternative) */}
+                      <div className="flex flex-col space-y-1 mt-2">
+                        <label className="text-[10px] text-gray-500">
+                          Hours Worked
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.5"
+                          placeholder="Enter hours directly"
+                          value={w.hoursWorked ?? ""}
+                          onChange={(e) =>
+                            updateWorker(
+                              w._id,
+                              "hoursWorked",
+                              Number(e.target.value)
+                            )
+                          }
+                          className="border p-2 rounded text-sm focus:border-[var(--primary)]"
+                        />
+                        <small className="text-[10px] text-gray-400">
+                          Leave blank if using start/end time
+                        </small>
                       </div>
 
                       {/* Rest & Missing */}
