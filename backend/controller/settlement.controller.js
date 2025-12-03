@@ -306,3 +306,108 @@ export const getFarmerSettlementsHistory = async (req, res) => {
       .json({ msg: "Error in getting settlements history" });
   }
 };
+
+// ✅ 4. Full worker ledger (attendance, advances, extras, settlements)
+export const getWorkerLedger = async (req, res) => {
+  try {
+    const { workerId } = req.params;
+
+    const worker = await Worker.findById(workerId);
+    if (!worker) {
+      return res.status(404).json({ msg: "Worker not found" });
+    }
+
+    if (worker.farmerId.toString() !== req.user.id) {
+      return res.status(403).json({ msg: "Not authorized" });
+    }
+
+    const [attendanceList, advancesList, extrasList, settlementsList] =
+      await Promise.all([
+        Attendance.find({ workerId }).lean(),
+        Advance.find({ workerId }).lean(),
+        Extra.find({ workerId }).lean(),
+        Settlement.find({ workerId }).lean(),
+      ]);
+
+    const entries = [];
+
+    // Attendance → YOU GOT (worker worked, you owe money)
+    attendanceList.forEach((a) => {
+      const amount = a.total || 0;
+      entries.push({
+        _id: a._id,
+        type: "attendance",
+        direction: "in", // YOU GOT (work)
+        amount,
+        label:
+          a.note ||
+          (a.hoursWorked ? `${a.hoursWorked} hr worked` : "Attendance added"),
+        createdAt: a.createdAt || a.date,
+      });
+    });
+
+    // Advances → YOU GAVE (you paid worker)
+    advancesList.forEach((adv) => {
+      const amount = adv.amount || 0;
+      entries.push({
+        _id: adv._id,
+        type: "advance",
+        direction: "out", // YOU GAVE money
+        amount,
+        label: adv.note || "Advance paid",
+        createdAt: adv.createdAt || adv.date,
+      });
+    });
+
+    // Extras → YOU GAVE (items like wheat bag)
+    extrasList.forEach((ex) => {
+      const amount = ex.price || 0;
+      entries.push({
+        _id: ex._id,
+        type: "extra",
+        direction: "out", // YOU GAVE value
+        amount,
+        label: ex.itemName
+          ? `${ex.itemName} given`
+          : ex.note || "Extra item given",
+        createdAt: ex.createdAt || ex.date,
+      });
+    });
+
+    // Settlements → usually YOU GAVE (paying dues)
+    settlementsList.forEach((st) => {
+      let amt = st.netAmount || 0;
+      const isOut = amt >= 0; // positive = you paid worker; negative = worker gave you
+      amt = Math.abs(amt);
+
+      entries.push({
+        _id: st._id,
+        type: "settlement",
+        direction: isOut ? "out" : "in",
+        amount: amt,
+        label: st.note || "Settlement",
+        createdAt: st.createdAt || st.endDate || st.startDate,
+      });
+    });
+
+    // Sort newest first
+    entries.sort(
+      (a, b) =>
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+
+    return res.status(200).json({
+      msg: "Worker ledger fetched",
+      worker: {
+        _id: worker._id,
+        name: worker.name,
+        remarks: worker.remarks || "",
+        status: worker.status || "active",
+      },
+      entries,
+    });
+  } catch (error) {
+    console.log("Error in getWorkerLedger", error);
+    return res.status(500).json({ msg: "Error in getting worker ledger" });
+  }
+};

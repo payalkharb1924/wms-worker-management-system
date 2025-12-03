@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import api from "../api/axios.js";
 import { toast } from "react-toastify";
 import { Loader } from "lucide-react";
+import WorkerLedger from "./WorkerLedger.jsx";
 
 const WorkersTab = () => {
   const [workers, setWorkers] = useState([]);
@@ -333,66 +334,13 @@ const WorkersTab = () => {
                   </button>
                 </div>
                 {/* Summary Section */}
-                <div className="mt-4 bg-gray-50 rounded-xl p-4 border border-gray-200">
-                  <p className="font-semibold mb-3 text-gray-700">
-                    📊 Earnings Summary
-                  </p>
-
-                  {summaryLoading ? (
-                    <div className="text-center text-gray-500">
-                      <Loader className="w-5 h-5 animate-spin mx-auto" />
-                    </div>
-                  ) : pendingSummary ? (
-                    <>
-                      <div className="text-sm space-y-1">
-                        <div className="flex justify-between">
-                          <span>Attendance Wage</span>
-                          <span className="font-semibold">
-                            ₹{pendingSummary.amounts.attendanceTotal}
-                          </span>
-                        </div>
-                        <div className="flex justify-between text-red-600">
-                          <span>Extras (items)</span>
-                          <span className="font-semibold">
-                            -₹{pendingSummary.amounts.extrasTotal}
-                          </span>
-                        </div>
-                        <div className="flex justify-between text-red-600">
-                          <span>Advances Paid</span>
-                          <span className="font-semibold">
-                            -₹{pendingSummary.amounts.advancesTotal}
-                          </span>
-                        </div>
-
-                        <div className="border-t my-2"></div>
-
-                        <div className="flex justify-between font-bold text-[var(--primary)]">
-                          <span>Net Pending</span>
-                          <span>₹{pendingSummary.amounts.netPending}</span>
-                        </div>
-                      </div>
-
-                      {/* Last Settlement Info */}
-                      <p className="text-xs text-gray-500 mt-3">
-                        Last settled till:{" "}
-                        {pendingSummary.lastSettledTill
-                          ? new Date(
-                              pendingSummary.lastSettledTill
-                            ).toLocaleDateString("en-IN")
-                          : "Not settled yet"}
-                      </p>
-
-                      <button
-                        className="primary-bg mt-4 w-full py-2 rounded-lg text-white font-semibold"
-                        onClick={() => setShowSettlePopup(true)}
-                      >
-                        Settle Payment
-                      </button>
-                    </>
-                  ) : (
-                    <p className="text-gray-500 text-sm">No data</p>
-                  )}
-                </div>
+                {/* Worker ledger (Khatabook-style) */}
+                <WorkerLedger
+                  workerId={selectedWorker._id}
+                  pendingSummary={pendingSummary}
+                  summaryLoading={summaryLoading}
+                  onSettleClick={() => setShowSettlePopup(true)}
+                />
 
                 <button
                   onClick={() => setShowDetails(false)}

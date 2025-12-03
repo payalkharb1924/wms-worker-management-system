@@ -6,6 +6,7 @@ import {
   createSettlementForWorker,
   getWorkerSettlements,
   getFarmerSettlementsHistory,
+  getWorkerLedger,
 } from "../controller/settlement.controller.js";
 
 const router = express.Router();
@@ -29,5 +30,7 @@ router.get("/worker/:workerId/history", authMiddleware, getWorkerSettlements);
 
 // ✅ NEW: All settlements of this farmer (Summary tab -> History)
 router.get("/farmer/history", authMiddleware, getFarmerSettlementsHistory);
+
+router.get("/worker/:workerId/ledger", authMiddleware, getWorkerLedger);
 
 export default router;
