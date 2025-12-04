@@ -167,7 +167,8 @@ const WorkerLedger = ({
                   {entry.label || "Entry"}
                 </span>
                 <span
-                  className={`inline-flex mt-[2px] px-2 py-[1px] rounded-full text-[9px] max-w-20 font-medium ${chip.className}`}
+                  className={`inline-flex mt-[2px] px-2 py-[1px] rounded-full text-[9px] max-w-20
+                     font-medium ${chip.className}`}
                 >
                   {chip.label}
                 </span>
