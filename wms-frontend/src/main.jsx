@@ -11,3 +11,9 @@ ReactDOM.createRoot(document.getElementById("root")).render(
     <ToastContainer position="top-center" />
   </>
 );
+
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker
+    .register("/firebase-messaging-sw.js")
+    .then(() => console.log("Firebase SW Registered"));
+}

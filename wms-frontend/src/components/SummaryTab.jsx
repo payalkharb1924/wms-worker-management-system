@@ -24,6 +24,7 @@ import {
   ResponsiveContainer,
   Legend,
 } from "recharts";
+import { requestNotificationPermission } from "../firebase";
 
 const INSIGHT_OPTIONS = [
   { value: "pendingVsSettled", label: "Pending vs Settled amounts" },
@@ -50,6 +51,18 @@ const COLORS = [
   "#EC4899", // pink
   "#0EA5E9", // cyan
 ];
+
+const ensureNotificationEnabled = async () => {
+  try {
+    const token = await requestNotificationPermission();
+    if (token) {
+      await api.post("/notifications/save-token", { fcmToken: token });
+      console.log("FCM Token saved!");
+    }
+  } catch (err) {
+    console.error("Token Save Failed", err);
+  }
+};
 
 const SummaryTab = () => {
   const [viewMode, setViewMode] = useState("history"); // "history" | "insights"
@@ -102,8 +115,12 @@ const SummaryTab = () => {
 
   // lazily load insights when user switches to that tab first time
   useEffect(() => {
-    if (viewMode === "insights" && !insightsData && !insightsLoading) {
-      fetchInsights();
+    if (viewMode === "insights") {
+      ensureNotificationEnabled();
+
+      if (!insightsData && !insightsLoading) {
+        fetchInsights();
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [viewMode]);

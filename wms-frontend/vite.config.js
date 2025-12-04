@@ -37,8 +37,8 @@ export default defineConfig({
             type: "image/png",
           },
           {
-            src: "icons/icon-512.png",
-            sizes: "512x512",
+            src: "icons/splash-screen.png",
+            sizes: "1280x2688",
             type: "image/png",
           },
           {
