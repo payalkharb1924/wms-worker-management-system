@@ -1,5 +1,19 @@
 import Worker from "../models/Worker.js";
 import Advance from "../models/Advance.js";
+import Settlement from "../models/Settlement.js";
+
+const getLastSettledDate = async (workerId) => {
+  const lastSettlement = await Settlement.findOne({ workerId })
+    .sort({ endDate: -1 })
+    .select("endDate")
+    .lean();
+
+  if (!lastSettlement) return null;
+
+  const d = new Date(lastSettlement.endDate);
+  d.setHours(0, 0, 0, 0);
+  return d;
+};
 
 export const createAdvance = async (req, res) => {
   try {
@@ -19,9 +33,20 @@ export const createAdvance = async (req, res) => {
     }
     const advanceDate = new Date(date);
     advanceDate.setHours(0, 0, 0, 0);
+    const entryDate = new Date(`${date}T12:00:00.000Z`);
+
+    const lastSettledDate = await getLastSettledDate(workerId);
+    if (lastSettledDate && entryDate <= lastSettledDate) {
+      return res.status(400).json({
+        msg: `Cannot add advance before or on ${
+          lastSettledDate.toISOString().split("T")[0]
+        }`,
+      });
+    }
+
     const advance = await Advance.create({
       workerId,
-      date,
+      date: new Date(`${date}T12:00:00.000Z`),
       amount,
       note: note || "",
     });
@@ -109,11 +134,21 @@ export const updateAdvance = async (req, res) => {
     if (amount <= 0) {
       return res.status(400).json({ msg: "Enter valid amount" });
     }
+    const entryDate = date
+      ? new Date(`${date}T12:00:00.000Z`)
+      : new Date(advance.date);
+
+    const lastSettledDate = await getLastSettledDate(advance.workerId);
+    if (lastSettledDate && entryDate <= lastSettledDate) {
+      return res.status(400).json({
+        msg: "Cannot edit advance from a settled period",
+      });
+    }
 
     const updatedAdvance = await Advance.findByIdAndUpdate(
       advanceId,
       {
-        date: date || advance.date,
+        date: date ? new Date(`${date}T12:00:00.000Z`) : advance.date,
         amount: amount || advance.amount,
         note: note || advance.note,
       },
@@ -141,6 +176,15 @@ export const deleteAdvance = async (req, res) => {
     const worker = await Worker.findById(advance.workerId);
     if (!worker || worker.farmerId.toString() !== req.user.id) {
       return res.status(403).json({ msg: "Not authorized" });
+    }
+    const entryDate = new Date(advance.date);
+    entryDate.setHours(0, 0, 0, 0);
+
+    const lastSettledDate = await getLastSettledDate(advance.workerId);
+    if (lastSettledDate && entryDate <= lastSettledDate) {
+      return res.status(400).json({
+        msg: "Cannot delete advance from a settled period",
+      });
     }
 
     await Advance.findByIdAndDelete(advanceId);

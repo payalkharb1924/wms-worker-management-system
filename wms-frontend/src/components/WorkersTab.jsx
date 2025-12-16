@@ -118,8 +118,9 @@ const WorkersTab = () => {
   };
 
   const handleSettlementConfirm = async () => {
-    if (!settleForm.startDate || !settleForm.endDate)
-      return toast.error("Select both dates!");
+    if (!settleForm.startDate) {
+      return toast.error("Nothing pending to settle");
+    }
 
     setSettleLoading(true);
     try {
@@ -172,14 +173,12 @@ const WorkersTab = () => {
   useEffect(() => {
     if (showSettlePopup && pendingSummary) {
       setSettleForm({
-        startDate: pendingSummary.suggestedStartDate
-          ? pendingSummary.suggestedStartDate.split("T")[0]
-          : "2025-01-01", // beginning of time
-        endDate: pendingSummary.suggestedEndDate.split("T")[0],
+        startDate: pendingSummary.suggestedStartDate || "",
+        endDate: pendingSummary.suggestedEndDate || "",
         note: "",
       });
     }
-  }, [showSettlePopup]);
+  }, [showSettlePopup, pendingSummary]);
 
   return (
     <div>
@@ -414,6 +413,9 @@ const WorkersTab = () => {
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50">
           <div className="bg-white w-[90%] max-w-md p-5 rounded-xl shadow-lg space-y-3">
             <h3 className="text-lg font-bold">Settle Payment</h3>
+            <p className="text-xs text-gray-500">
+              Settlement period is auto-calculated and cannot be changed.
+            </p>
 
             {/* Date range */}
             <div className="grid grid-cols-2 gap-3 text-sm">
@@ -422,10 +424,8 @@ const WorkersTab = () => {
                 <input
                   type="date"
                   value={settleForm.startDate}
-                  onChange={(e) =>
-                    setSettleForm({ ...settleForm, startDate: e.target.value })
-                  }
-                  className="border rounded-md p-2 w-full"
+                  disabled
+                  className="border rounded-md p-2 w-full bg-gray-100 cursor-not-allowed"
                 />
               </div>
               <div>
@@ -433,10 +433,8 @@ const WorkersTab = () => {
                 <input
                   type="date"
                   value={settleForm.endDate}
-                  onChange={(e) =>
-                    setSettleForm({ ...settleForm, endDate: e.target.value })
-                  }
-                  className="border rounded-md p-2 w-full"
+                  disabled
+                  className="border rounded-md p-2 w-full bg-gray-100 cursor-not-allowed"
                 />
               </div>
             </div>

@@ -1,5 +1,19 @@
 import Extra from "../models/Extra.js";
 import Worker from "../models/Worker.js";
+import Settlement from "../models/Settlement.js";
+
+const getLastSettledDate = async (workerId) => {
+  const lastSettlement = await Settlement.findOne({ workerId })
+    .sort({ endDate: -1 })
+    .select("endDate")
+    .lean();
+
+  if (!lastSettlement) return null;
+
+  const d = new Date(lastSettlement.endDate);
+  d.setHours(0, 0, 0, 0);
+  return d;
+};
 
 export const createExtra = async (req, res) => {
   try {
@@ -14,10 +28,20 @@ export const createExtra = async (req, res) => {
     if (price !== undefined && price <= 0) {
       return res.status(400).json({ msg: "Enter valid price" });
     }
+    const entryDate = new Date(`${date}T12:00:00.000Z`);
+
+    const lastSettledDate = await getLastSettledDate(workerId);
+    if (lastSettledDate && entryDate <= lastSettledDate) {
+      return res.status(400).json({
+        msg: `Cannot add extra before or on ${
+          lastSettledDate.toISOString().split("T")[0]
+        }`,
+      });
+    }
 
     const extra = await Extra.create({
       itemName,
-      date,
+      date: new Date(`${date}T12:00:00.000Z`),
       price,
       note,
       workerId,
@@ -103,11 +127,21 @@ export const updateExtra = async (req, res) => {
     if (price !== undefined && price <= 0) {
       return res.status(400).json({ msg: "Enter valid price" });
     }
+    const entryDate = date
+      ? new Date(`${date}T12:00:00.000Z`)
+      : new Date(extra.date);
+
+    const lastSettledDate = await getLastSettledDate(extra.workerId);
+    if (lastSettledDate && entryDate <= lastSettledDate) {
+      return res.status(400).json({
+        msg: "Cannot edit extra from a settled period",
+      });
+    }
 
     const updatedExtra = await Extra.findByIdAndUpdate(
       extraId,
       {
-        date: date || extra.date,
+        date: date ? new Date(`${date}T12:00:00.000Z`) : extra.date,
         itemName: itemName || extra.itemName,
         note: note || extra.note,
         price: price || extra.price,
@@ -135,6 +169,15 @@ export const deleteExtra = async (req, res) => {
     const worker = await Worker.findById(extra.workerId);
     if (!worker || worker.farmerId.toString() !== req.user.id) {
       return res.status(403).json({ msg: "Not authorized" });
+    }
+    const entryDate = new Date(extra.date);
+    entryDate.setHours(0, 0, 0, 0);
+
+    const lastSettledDate = await getLastSettledDate(extra.workerId);
+    if (lastSettledDate && entryDate <= lastSettledDate) {
+      return res.status(400).json({
+        msg: "Cannot delete extra from a settled period",
+      });
     }
 
     await Extra.findByIdAndDelete(extraId);

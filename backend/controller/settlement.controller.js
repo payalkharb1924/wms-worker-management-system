@@ -4,69 +4,56 @@ import Advance from "../models/Advance.js";
 import Extra from "../models/Extra.js";
 import Settlement from "../models/Settlement.js";
 
-// ✅ 1. Get pending summary for a worker (unsettled only)
+// helper → ALWAYS send date-only string (no timezone bugs)
+const toDateOnly = (date) => (date ? date.toISOString().split("T")[0] : null);
+
 export const getWorkerPendingSummary = async (req, res) => {
   try {
     const { workerId } = req.params;
 
     const worker = await Worker.findById(workerId);
-    if (!worker) {
-      return res.status(404).json({ msg: "Worker not found" });
-    }
+    if (!worker) return res.status(404).json({ msg: "Worker not found" });
 
     if (worker.farmerId.toString() !== req.user.id) {
       return res.status(403).json({ msg: "Not authorized" });
     }
 
-    // last settlement
-    const lastSettlement = await Settlement.findOne({ workerId })
-      .sort({ endDate: -1 })
-      .lean();
-
-    const lastSettledTill = lastSettlement ? lastSettlement.endDate : null;
-
-    // All UNSETTLED entries (we can later filter by date if needed)
-    const [attendanceList, advancesList, extrasList] = await Promise.all([
-      Attendance.find({
-        workerId,
-        isSettled: false,
-      }).lean(),
-      Advance.find({
-        workerId,
-        isSettled: false,
-      }).lean(),
-      Extra.find({
-        workerId,
-        isSettled: false,
-      }).lean(),
+    // Fetch all UNSETTLED entries
+    const [attendance, advances, extras] = await Promise.all([
+      Attendance.find({ workerId, isSettled: false }).lean(),
+      Advance.find({ workerId, isSettled: false }).lean(),
+      Extra.find({ workerId, isSettled: false }).lean(),
     ]);
 
-    const attendanceTotal = attendanceList.reduce(
-      (sum, a) => sum + (a.total || 0),
-      0
-    );
-    const advancesTotal = advancesList.reduce(
-      (sum, adv) => sum + (adv.amount || 0),
-      0
-    );
-    const extrasTotal = extrasList.reduce(
-      (sum, ex) => sum + (ex.price || 0),
-      0
-    );
+    // Amounts
+    const attendanceTotal = attendance.reduce((s, a) => s + (a.total || 0), 0);
+    const advancesTotal = advances.reduce((s, a) => s + (a.amount || 0), 0);
+    const extrasTotal = extras.reduce((s, e) => s + (e.price || 0), 0);
 
     const netPending = attendanceTotal - advancesTotal - extrasTotal;
 
-    // Suggest default period for next settlement
-    // start = (lastSettledTill + 1 day) OR null
-    let suggestedStartDate = null;
-    if (lastSettledTill) {
-      const d = new Date(lastSettledTill);
-      d.setDate(d.getDate() + 1);
-      suggestedStartDate = d;
-    }
+    // 👉 DATE-ONLY collection (THIS FIXES EVERYTHING)
+    const pendingDates = [
+      ...attendance.map((a) => a.date),
+      ...advances.map((a) => a.date),
+      ...extras.map((e) => e.date),
+    ]
+      .filter(Boolean)
+      .map((d) => d.toISOString().split("T")[0]); // YYYY-MM-DD
 
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    const suggestedStartDate = pendingDates.length
+      ? pendingDates.reduce((a, b) => (a < b ? a : b))
+      : null;
+
+    const suggestedEndDate = pendingDates.length
+      ? pendingDates.reduce((a, b) => (a > b ? a : b))
+      : null;
+
+    // Last settlement info (optional, informational only)
+    const lastSettlement = await Settlement.findOne({ workerId })
+      .sort({ endDate: -1 })
+      .select("endDate")
+      .lean();
 
     return res.status(200).json({
       msg: "Worker pending summary fetched",
@@ -80,181 +67,107 @@ export const getWorkerPendingSummary = async (req, res) => {
         extrasTotal,
         netPending,
       },
-      lastSettledTill,
+      lastSettledTill: lastSettlement
+        ? lastSettlement.endDate.toISOString().split("T")[0]
+        : null,
       suggestedStartDate,
-      suggestedEndDate: today,
+      suggestedEndDate,
     });
-  } catch (error) {
-    console.log("Error in getWorkerPendingSummary", error);
+  } catch (err) {
+    console.error("getWorkerPendingSummary error:", err);
     return res
       .status(500)
       .json({ msg: "Error in getting worker pending summary" });
   }
 };
 
-// ✅ 2. Create a settlement for a worker (set all in range to settled)
 export const createSettlementForWorker = async (req, res) => {
   try {
     const { workerId } = req.params;
     const { startDate, endDate, note } = req.body;
 
-    if (!startDate || !endDate) {
-      return res.status(400).json({ msg: "Start and end date required" });
-    }
-
     const worker = await Worker.findById(workerId);
-    if (!worker) {
-      return res.status(404).json({ msg: "Worker not found" });
-    }
+    if (!worker) return res.status(404).json({ msg: "Worker not found" });
 
     if (worker.farmerId.toString() !== req.user.id) {
       return res.status(403).json({ msg: "Not authorized" });
     }
 
-    const start = new Date(startDate);
-    start.setHours(0, 0, 0, 0);
-    const end = new Date(endDate);
-    end.setHours(23, 59, 59, 999);
+    // Fetch ALL unsettled entries
+    const [attendance, advances, extras] = await Promise.all([
+      Attendance.find({ workerId, isSettled: false }).lean(),
+      Advance.find({ workerId, isSettled: false }).lean(),
+      Extra.find({ workerId, isSettled: false }).lean(),
+    ]);
 
-    if (start > end) {
-      return res.status(400).json({ msg: "Start date cannot be after end" });
+    if (!attendance.length && !advances.length && !extras.length) {
+      return res.status(400).json({ msg: "No pending entries to settle" });
     }
 
-    // Guard: don't allow going "behind" last settlement
-    const lastSettlement = await Settlement.findOne({ workerId })
-      .sort({ endDate: -1 })
-      .lean();
+    // Date-only comparison (CRITICAL)
+    const pendingDates = [
+      ...attendance.map((a) => a.date),
+      ...advances.map((a) => a.date),
+      ...extras.map((e) => e.date),
+    ]
+      .filter(Boolean)
+      .map((d) => d.toISOString().split("T")[0]);
 
-    if (lastSettlement && start <= lastSettlement.endDate) {
+    const earliest = pendingDates.reduce((a, b) => (a < b ? a : b));
+    const latest = pendingDates.reduce((a, b) => (a > b ? a : b));
+
+    if (startDate !== earliest) {
       return res.status(400).json({
-        msg: `Already settled till ${lastSettlement.endDate.toDateString()}`,
+        msg: `Settlement must start from ${earliest}`,
       });
     }
 
-    // Fetch all UNSETTLED entries in this period
-    const [attendanceList, advancesList, extrasList] = await Promise.all([
-      Attendance.find({
-        workerId,
-        date: { $gte: start, $lte: end },
-        isSettled: false,
-      }).lean(),
-      Advance.find({
-        workerId,
-        date: { $gte: start, $lte: end },
-        isSettled: false,
-      }).lean(),
-      Extra.find({
-        workerId,
-        date: { $gte: start, $lte: end },
-        isSettled: false,
-      }).lean(),
-    ]);
+    if (endDate !== latest) {
+      return res.status(400).json({
+        msg: `Settlement must end on ${latest}`,
+      });
+    }
 
-    const attendanceTotal = attendanceList.reduce(
-      (sum, a) => sum + (a.total || 0),
-      0
-    );
-    const advancesTotal = advancesList.reduce(
-      (sum, adv) => sum + (adv.amount || 0),
-      0
-    );
-    const extrasTotal = extrasList.reduce(
-      (sum, ex) => sum + (ex.price || 0),
-      0
-    );
+    // Amounts
+    const attendanceTotal = attendance.reduce((s, a) => s + (a.total || 0), 0);
+    const advancesTotal = advances.reduce((s, a) => s + (a.amount || 0), 0);
+    const extrasTotal = extras.reduce((s, e) => s + (e.price || 0), 0);
 
     const netAmount = attendanceTotal - advancesTotal - extrasTotal;
 
-    // Even if nothing to settle, you *could* block:
-    if (
-      attendanceList.length === 0 &&
-      advancesList.length === 0 &&
-      extrasList.length === 0
-    ) {
-      return res.status(400).json({
-        msg: "No pending entries to settle in this range",
-      });
-    }
-
-    // Create settlement row
+    // Persist settlement
     const settlement = await Settlement.create({
       workerId,
       farmerId: req.user.id,
-      startDate: start,
-      endDate: end,
+      startDate: new Date(`${startDate}T00:00:00.000Z`),
+      endDate: new Date(`${endDate}T23:59:59.999Z`),
       attendanceTotal,
-      extrasTotal,
       advancesTotal,
+      extrasTotal,
       netAmount,
       note: note || "",
     });
 
-    const attendanceIds = attendanceList.map((a) => a._id);
-    const advanceIds = advancesList.map((a) => a._id);
-    const extraIds = extrasList.map((e) => e._id);
-
-    // Mark all matched entries as settled
+    // Mark all as settled
     await Promise.all([
-      attendanceIds.length
-        ? Attendance.updateMany(
-            { _id: { $in: attendanceIds } },
-            { $set: { isSettled: true, settlementId: settlement._id } }
-          )
-        : Promise.resolve(),
-      advanceIds.length
-        ? Advance.updateMany(
-            { _id: { $in: advanceIds } },
-            { $set: { isSettled: true, settlementId: settlement._id } }
-          )
-        : Promise.resolve(),
-      extraIds.length
-        ? Extra.updateMany(
-            { _id: { $in: extraIds } },
-            { $set: { isSettled: true, settlementId: settlement._id } }
-          )
-        : Promise.resolve(),
+      Attendance.updateMany(
+        { _id: { $in: attendance.map((a) => a._id) } },
+        { isSettled: true, settlementId: settlement._id }
+      ),
+      Advance.updateMany(
+        { _id: { $in: advances.map((a) => a._id) } },
+        { isSettled: true, settlementId: settlement._id }
+      ),
+      Extra.updateMany(
+        { _id: { $in: extras.map((e) => e._id) } },
+        { isSettled: true, settlementId: settlement._id }
+      ),
     ]);
 
-    // Recalculate remaining pending (after this settlement)
-    const [remainingAttendance, remainingAdvances, remainingExtras] =
-      await Promise.all([
-        Attendance.find({ workerId, isSettled: false }).lean(),
-        Advance.find({ workerId, isSettled: false }).lean(),
-        Extra.find({ workerId, isSettled: false }).lean(),
-      ]);
-
-    const remainingAttendanceTotal = remainingAttendance.reduce(
-      (sum, a) => sum + (a.total || 0),
-      0
-    );
-    const remainingAdvancesTotal = remainingAdvances.reduce(
-      (sum, a) => sum + (a.amount || 0),
-      0
-    );
-    const remainingExtrasTotal = remainingExtras.reduce(
-      (sum, e) => sum + (e.price || 0),
-      0
-    );
-
-    const remainingNet =
-      remainingAttendanceTotal - remainingAdvancesTotal - remainingExtrasTotal;
-
-    return res.status(201).json({
-      msg: "Settlement created",
-      settlement: {
-        ...settlement._doc,
-        netPending: settlement.netAmount, // alias for frontend
-      },
-      remaining: {
-        attendanceTotal: remainingAttendanceTotal,
-        advancesTotal: remainingAdvancesTotal,
-        extrasTotal: remainingExtrasTotal,
-        netPending: remainingNet, // frontend uses this
-      },
-    });
-  } catch (error) {
-    console.log("Error in createSettlementForWorker", error);
-    return res.status(500).json({ msg: "Error in creating worker settlement" });
+    return res.status(201).json({ msg: "Settlement created successfully" });
+  } catch (err) {
+    console.error("createSettlementForWorker error:", err);
+    return res.status(500).json({ msg: "Error in creating settlement" });
   }
 };
 
@@ -342,7 +255,7 @@ export const getWorkerLedger = async (req, res) => {
         label:
           a.note ||
           (a.hoursWorked ? `${a.hoursWorked} hr worked` : "Attendance added"),
-        createdAt: a.createdAt || a.date,
+        createdAt: a.date,
       });
     });
 
@@ -355,7 +268,7 @@ export const getWorkerLedger = async (req, res) => {
         direction: "out", // YOU GAVE money
         amount,
         label: adv.note || "Advance paid",
-        createdAt: adv.createdAt || adv.date,
+        createdAt: adv.date,
       });
     });
 
@@ -370,7 +283,7 @@ export const getWorkerLedger = async (req, res) => {
         label: ex.itemName
           ? `${ex.itemName} given`
           : ex.note || "Extra item given",
-        createdAt: ex.createdAt || ex.date,
+        createdAt: ex.date,
       });
     });
 

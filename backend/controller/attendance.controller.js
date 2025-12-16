@@ -1,5 +1,19 @@
 import Attendance from "../models/Attendance.js";
 import Worker from "../models/Worker.js";
+import Settlement from "../models/Settlement.js";
+
+// helper: get last settled date for worker
+const getLastSettledDate = async (workerId) => {
+  const lastSettlement = await Settlement.findOne({ workerId })
+    .sort({ endDate: -1 })
+    .select("endDate")
+    .lean();
+
+  if (!lastSettlement) return null;
+
+  // DO NOT mutate hours
+  return new Date(lastSettlement.endDate);
+};
 
 export const createAttendance = async (req, res) => {
   try {
@@ -24,12 +38,27 @@ export const createAttendance = async (req, res) => {
         .status(403)
         .json({ msg: "Not authorized to create Attendance" });
     }
-    const attendanceDate = new Date(date);
-    attendanceDate.setHours(0, 0, 0, 0);
+    const attendanceDate = new Date(`${date}T12:00:00.000Z`);
+
     // This ensures:
     //     2025-11-15 5 PM
     //     2025-11-15 1 AM
     //     Are considered same date.
+
+    // ❌ block backdated attendance after settlement
+    const lastSettledDate = await getLastSettledDate(workerId);
+
+    if (lastSettledDate && attendanceDate <= lastSettledDate) {
+      const blockedTill = new Date(lastSettledDate);
+      blockedTill.setHours(0, 0, 0, 0);
+
+      return res.status(400).json({
+        msg: `Cannot add attendance before or on ${
+          blockedTill.toISOString().split("T")[0]
+        }`,
+      });
+    }
+
     const alreadyExist = await Attendance.findOne({
       workerId,
       date: attendanceDate,
@@ -92,6 +121,24 @@ export const updateAttendance = async (req, res) => {
     if (worker.farmerId.toString() !== req.user.id) {
       return res.status(403).json({ msg: "Unauthorized to update Attendance" });
     }
+    // ❌ prevent editing settled attendance
+    if (attendance.isSettled) {
+      return res.status(400).json({
+        msg: "Cannot edit attendance that is already settled",
+      });
+    }
+
+    // ❌ prevent editing attendance before last settlement
+    const lastSettledDate = await getLastSettledDate(attendance.workerId);
+    const attendanceDate = new Date(attendance.date);
+    attendanceDate.setHours(0, 0, 0, 0);
+
+    if (lastSettledDate && attendanceDate <= lastSettledDate) {
+      return res.status(400).json({
+        msg: "Cannot edit attendance from a settled period",
+      });
+    }
+
     const startTime = req.body.startTime || attendance.startTime;
     const endTime = req.body.endTime || attendance.endTime;
     const restMinutes = req.body.restMinutes ?? attendance.restMinutes;
@@ -181,7 +228,7 @@ export const getAttendanceByDateRange = async (req, res) => {
     start.setHours(0, 0, 0, 0);
 
     const end = new Date(endDate);
-    end.setHours(29, 59, 59, 999);
+    end.setHours(23, 59, 59, 999);
 
     // get all workers for this farmer
     const workers = await Worker.find({ farmerId: req.user.id });
@@ -221,6 +268,24 @@ export const deleteAttendance = async (req, res) => {
 
     if (worker.farmerId.toString() !== req.user.id) {
       return res.status(403).json({ msg: "Not authorized" });
+    }
+
+    // ❌ prevent deleting settled attendance
+    if (attendance.isSettled) {
+      return res.status(400).json({
+        msg: "Cannot delete attendance that is already settled",
+      });
+    }
+
+    // ❌ prevent deleting attendance before last settlement
+    const lastSettledDate = await getLastSettledDate(attendance.workerId);
+    const attendanceDate = new Date(attendance.date);
+    attendanceDate.setHours(0, 0, 0, 0);
+
+    if (lastSettledDate && attendanceDate <= lastSettledDate) {
+      return res.status(400).json({
+        msg: "Cannot delete attendance from a settled period",
+      });
     }
 
     await Attendance.findByIdAndDelete(attendanceId);
