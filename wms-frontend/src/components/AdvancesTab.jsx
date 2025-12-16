@@ -425,12 +425,12 @@ const AdvancesTab = () => {
   return (
     <div className="pb-10">
       {/* Toggle Tabs */}
-      <div className="flex gap-2 mb-4">
+      <div className="flex gap-2 mb-5 bg-gray-100 p-1 rounded-xl">
         <button
-          className={`flex-1 py-2 rounded-md font-medium ${
+          className={`flex-1 py-2.5 rounded-lg text-sm font-semibold transition-all duration-200 ${
             viewMode === "daily"
-              ? "primary-bg text-white"
-              : "bg-gray-200 text-gray-700"
+              ? "primary-bg text-white shadow-sm"
+              : "text-gray-600"
           }`}
           onClick={() => setViewMode("daily")}
         >
@@ -450,7 +450,7 @@ const AdvancesTab = () => {
 
       {/* DAILY VIEW */}
       {viewMode === "daily" && (
-        <div>
+        <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-200 space-y-4">
           {/* Worker + Date */}
           <div className="grid grid-cols-1 gap-4 mb-4">
             <div className="flex flex-col gap-1">
@@ -464,7 +464,9 @@ const AdvancesTab = () => {
                 <select
                   value={dailyWorkerId}
                   onChange={(e) => setDailyWorkerId(e.target.value)}
-                  className="border rounded-lg p-2 text-sm focus:outline-none focus:border-[var(--primary)]"
+                  className="border border-gray-200 rounded-xl px-3 py-2.5 text-sm
+focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/20
+focus:border-[var(--primary)] transition"
                 >
                   <option value="">Select worker</option>
                   {workers.map((w) => (
@@ -482,7 +484,9 @@ const AdvancesTab = () => {
                 type="date"
                 value={dailyDate}
                 onChange={(e) => setDailyDate(e.target.value)}
-                className="border rounded-lg p-2 text-sm focus:outline-none focus:border-[var(--primary)]"
+                className="border border-gray-200 rounded-xl px-3 py-2.5 text-sm
+focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/20
+focus:border-[var(--primary)] transition"
               />
             </div>
           </div>
@@ -497,7 +501,9 @@ const AdvancesTab = () => {
                 value={dailyAmount}
                 onChange={(e) => setDailyAmount(e.target.value)}
                 placeholder="Enter amount"
-                className="border rounded-lg p-2 text-sm focus:outline-none focus:border-[var(--primary)]"
+                className="border border-gray-200 rounded-xl px-3 py-2.5 text-sm
+focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/20
+focus:border-[var(--primary)] transition"
               />
             </div>
 
@@ -508,7 +514,9 @@ const AdvancesTab = () => {
                 value={dailyNote}
                 onChange={(e) => setDailyNote(e.target.value)}
                 placeholder="Reason, item given, etc."
-                className="border rounded-lg p-2 text-sm focus:outline-none focus:border-[var(--primary)]"
+                className="border border-gray-200 rounded-xl px-3 py-2.5 text-sm
+focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/20
+focus:border-[var(--primary)] transition"
               />
             </div>
           </div>
@@ -752,7 +760,8 @@ const AdvancesTab = () => {
               return (
                 <div
                   key={dateKey}
-                  className="bg-white shadow-lg rounded-2xl p-4 border border-gray-100 space-y-3"
+                  className="bg-white rounded-3xl p-5 border border-gray-100
+shadow-sm hover:shadow-md transition space-y-3"
                 >
                   {/* Header / Accordion Toggle */}
                   <div
@@ -872,7 +881,9 @@ const AdvancesTab = () => {
                                     : "text-gray-800"
                                 }`}
                               >
-                                ₹{item.amount}
+                                <span className="text-[15px] font-bold">
+                                  ₹{item.amount}
+                                </span>
                               </span>
                             </div>
                           </div>
@@ -905,7 +916,9 @@ const AdvancesTab = () => {
                 type="date"
                 value={editForm.date}
                 onChange={(e) => handleEditChange("date", e.target.value)}
-                className="border rounded-md p-2 text-sm focus:outline-none focus:border-[var(--primary)]"
+                className="border border-gray-200 rounded-xl px-3 py-2.5 text-sm
+focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/20
+focus:border-[var(--primary)] transition"
               />
             </div>
 
@@ -918,7 +931,9 @@ const AdvancesTab = () => {
                 onChange={(e) =>
                   handleEditChange("amount", Number(e.target.value))
                 }
-                className="border rounded-md p-2 text-sm focus:outline-none focus:border-[var(--primary)]"
+                className="border border-gray-200 rounded-xl px-3 py-2.5 text-sm
+focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/20
+focus:border-[var(--primary)] transition"
               />
             </div>
 
@@ -928,7 +943,9 @@ const AdvancesTab = () => {
                 type="text"
                 value={editForm.note}
                 onChange={(e) => handleEditChange("note", e.target.value)}
-                className="border rounded-md p-2 text-sm focus:outline-none focus:border-[var(--primary)]"
+                className="border border-gray-200 rounded-xl px-3 py-2.5 text-sm
+focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/20
+focus:border-[var(--primary)] transition"
               />
             </div>
 

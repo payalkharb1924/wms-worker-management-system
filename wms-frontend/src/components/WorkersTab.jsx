@@ -183,11 +183,11 @@ const WorkersTab = () => {
   return (
     <div>
       {/* Header */}
-      <div className="flex justify-between items-center mb-3">
+      <div className="flex justify-between items-center mb-5">
         <h3 className="text-lg font-bold">Workers</h3>
         <button
           onClick={() => setShowForm(true)}
-          className="primary-bg text-white px-3 py-2 rounded-lg text-sm"
+          className="primary-bg text-white px-4 py-2.5 rounded-xl text-sm font-semibold shadow-sm active:scale-95 transition"
         >
           + Add Worker
         </button>
@@ -205,20 +205,23 @@ const WorkersTab = () => {
             <div
               key={w._id}
               onClick={() => openWorkerDetails(w)}
-              className="p-3 bg-gray-100 rounded-lg flex justify-between items-start cursor-pointer hover:bg-gray-200 transition"
+              className="p-4 bg-white rounded-2xl flex justify-between items-start cursor-pointer
+border border-gray-200/80
+hover:shadow-md hover:bg-white
+transition-all duration-200 active:scale-[0.99]"
             >
               <div className="flex flex-col space-y-1">
-                <p className="font-semibold">{w.name}</p>
+                <p className="font-semibold text-gray-800 text-sm">{w.name}</p>
                 {w.remarks && (
-                  <p className="text-xs text-gray-500">{w.remarks}</p>
+                  <p className="text-[11px] text-gray-500">{w.remarks}</p>
                 )}
               </div>
               {w.status && (
                 <span
-                  className={`text-xs px-2 py-1 rounded self-start ${
+                  className={`text-[10px] px-2 py-1 rounded-full font-semibold ${
                     w.status === "active"
-                      ? "text-green-800 bg-green-200"
-                      : "bg-red-200 text-red-800"
+                      ? "bg-green-100 text-green-700"
+                      : "bg-red-100 text-red-700"
                   }`}
                 >
                   {w.status}
@@ -231,14 +234,17 @@ const WorkersTab = () => {
 
       {/* Add worker Modal */}
       {showForm && (
-        <div className="fixed inset-0 bg-black/30 flex justify-center items-center">
-          <div className="bg-white p-5 rounded-xl w-80 shadow-lg">
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex justify-center items-center z-50">
+          <div className="bg-white p-6 rounded-2xl w-[90%] max-w-sm shadow-xl space-y-3">
             <h3 className="font-bold mb-3 text-lg">Add Worker</h3>
             <form onSubmit={handleSubmit} className="space-y-3">
               <input
                 type="text"
                 placeholder="Worker Name"
-                className="w-full border-b rounded-md p-2 focus:outline-none focus:border-[var(--primary)]"
+                className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm
+focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/20
+focus:border-[var(--primary)] transition
+"
                 value={form.name}
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
                 required
@@ -247,12 +253,15 @@ const WorkersTab = () => {
               <input
                 type="text"
                 placeholder="Remarks (optional)"
-                className="w-full border-b rounded-md p-2 focus:outline-none focus:border-[var(--primary)]"
+                className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm
+focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/20
+focus:border-[var(--primary)] transition
+"
                 value={form.remarks}
                 onChange={(e) => setForm({ ...form, remarks: e.target.value })}
               />
 
-              <div className="flex gap-2 pt-2">
+              <div className="flex gap-3 pt-3">
                 <button
                   type="submit"
                   className={`text-white px-4 py-2 rounded-md w-full ${
@@ -281,9 +290,9 @@ const WorkersTab = () => {
         </div>
       )}
       {showDetails && selectedWorker && (
-        <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex justify-center items-end">
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex justify-center items-end z-40">
           <div
-            className="bg-white w-full max-w-md p-6 rounded-t-2xl shadow-xl animate-slide-up"
+            className="bg-white w-full max-w-md p-6 rounded-t-3xl shadow-2xl animate-slide-up"
             style={{ animationDuration: "0.3s" }}
           >
             {!editing ? (
@@ -291,7 +300,7 @@ const WorkersTab = () => {
                 <div className="flex justify-between items-center mb-2">
                   <div>
                     <h3 className="font-bold text-2xl mb-2">Worker Details</h3>
-                    <p className="font-semibold text-lg">
+                    <p className="font-semibold text-base text-gray-800">
                       {selectedWorker.name}
                     </p>
                     {selectedWorker.remarks && (
@@ -300,13 +309,13 @@ const WorkersTab = () => {
                       </p>
                     )}
                   </div>
-                  <span className="text-[10px] bg-green-200 text-green-800 px-2 py-1 rounded h-fit">
+                  <span className="text-[10px] bg-green-100 text-green-700 px-2 py-1 rounded-full h-fit">
                     {selectedWorker.status}
                   </span>
                 </div>
                 <div className="flex gap-2 mt-4">
                   <button
-                    className="bg-blue-500 text-white flex-1 py-2 rounded-md font-semibold"
+                    className="bg-blue-800 text-white flex-1 py-2.5 rounded-xl font-semibold active:scale-95 transition"
                     onClick={() => {
                       setEditing(true);
                       setEditForm({
@@ -319,7 +328,7 @@ const WorkersTab = () => {
                     Edit
                   </button>
                   <button
-                    className="bg-red-500 text-white flex-1 py-2 rounded-md font-semibold"
+                    className="bg-red-500 text-white flex-1 py-2.5 rounded-xl font-semibold active:scale-95 transition"
                     onClick={() => setShowDeleteConfirm(true)}
                     disabled={deleteLoading}
                   >
@@ -334,12 +343,14 @@ const WorkersTab = () => {
                 </div>
                 {/* Summary Section */}
                 {/* Worker ledger (Khatabook-style) */}
-                <WorkerLedger
-                  workerId={selectedWorker._id}
-                  pendingSummary={pendingSummary}
-                  summaryLoading={summaryLoading}
-                  onSettleClick={() => setShowSettlePopup(true)}
-                />
+                <div className="mt-4 bg-gray-50 border border-gray-200 rounded-2xl p-3">
+                  <WorkerLedger
+                    workerId={selectedWorker._id}
+                    pendingSummary={pendingSummary}
+                    summaryLoading={summaryLoading}
+                    onSettleClick={() => setShowSettlePopup(true)}
+                  />
+                </div>
 
                 <button
                   onClick={() => setShowDetails(false)}
@@ -411,7 +422,7 @@ const WorkersTab = () => {
       {/* SETTLE PAYMENT POPUP */}
       {showSettlePopup && pendingSummary && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50">
-          <div className="bg-white w-[90%] max-w-md p-5 rounded-xl shadow-lg space-y-3">
+          <div className="bg-white w-[90%] max-w-md p-6 rounded-2xl shadow-xl space-y-4">
             <h3 className="text-lg font-bold">Settle Payment</h3>
             <p className="text-xs text-gray-500">
               Settlement period is auto-calculated and cannot be changed.
@@ -451,7 +462,7 @@ const WorkersTab = () => {
             />
 
             {/* Amount shown clearly */}
-            <div className="text-end font-bold text-[var(--primary)] text-lg">
+            <div className="text-right font-bold text-[var(--primary)] text-xl">
               ₹{pendingSummary.amounts.netPending}
             </div>
 
@@ -480,7 +491,7 @@ const WorkersTab = () => {
       )}
       {showDeleteConfirm && (
         <div className="fixed inset-0 bg-black/40 flex justify-center items-center z-50">
-          <div className="bg-white p-5 w-[90%] max-w-md rounded-xl shadow-lg space-y-3">
+          <div className="bg-white p-6 w-[90%] max-w-md rounded-2xl shadow-xl space-y-4">
             <h3 className="font-bold text-lg text-red-600">Confirm Delete</h3>
             <p className="text-sm text-gray-700">
               Deleting a worker will permanently remove all data related to:
@@ -490,7 +501,9 @@ const WorkersTab = () => {
             <input
               type="password"
               placeholder="Enter your password"
-              className="border p-2 text-sm w-full rounded-md"
+              className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm
+focus:outline-none focus:ring-2 focus:ring-red-200
+"
               value={deletePassword}
               onChange={(e) => setDeletePassword(e.target.value)}
             />

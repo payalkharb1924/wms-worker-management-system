@@ -40,7 +40,7 @@ export const createAdvance = async (req, res) => {
       return res.status(400).json({
         msg: `Cannot add advance before or on ${
           lastSettledDate.toISOString().split("T")[0]
-        }`,
+        }  because already settled till here.`,
       });
     }
 

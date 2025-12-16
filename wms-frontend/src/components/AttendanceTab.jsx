@@ -5,6 +5,7 @@ import { toast } from "react-toastify";
 
 const AttendanceTab = () => {
   const [workers, setWorkers] = useState([]);
+  const [searchQuery, setSearchQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState("daily");
   const [saving, setSaving] = useState(false);
@@ -242,7 +243,7 @@ const AttendanceTab = () => {
   // UI helpers for settled records
   const getCardStyle = (item) =>
     item.isSettled
-      ? "bg-gray-300 border border-gray-300"
+      ? "bg-gray-200 border border-gray-300"
       : "bg-gray-100 border border-gray-200";
 
   const getBadge = (item) =>
@@ -496,15 +497,24 @@ const AttendanceTab = () => {
     }
   };
 
+  // 👇 Only ACTIVE workers for Daily Attendance
+  const activeWorkers = workers.filter(
+    (w) => w.status === "active" || !w.status
+  );
+
+  const searchedWorkers = activeWorkers.filter((w) =>
+    w.name?.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
   return (
-    <div className="pb-10">
+    <div className="pb-0">
       {/* Toggle Tabs */}
-      <div className="flex gap-2 mb-4">
+      <div className="flex gap-2 mb-5 bg-gray-100 p-1 rounded-xl">
         <button
-          className={`flex-1 py-2 rounded-md font-medium ${
+          className={`flex-1 py-2.5 rounded-lg text-sm font-semibold transition-all duration-200 ${
             viewMode === "daily"
-              ? "primary-bg text-white"
-              : "bg-gray-200 text-gray-700"
+              ? "primary-bg text-white shadow-sm"
+              : "text-gray-600"
           }`}
           onClick={() => setViewMode("daily")}
         >
@@ -524,11 +534,11 @@ const AttendanceTab = () => {
 
       {/* DAILY VIEW */}
       {viewMode === "daily" && (
-        <div>
+        <div className="flex flex-col h-[calc(100vh-180px)]">
           {/* Apply to All & Date */}
           <div className="grid grid-cols-2 gap-4 items-center mb-4">
             {/* Apply to all */}
-            <div className="flex items-center gap-2">
+            <div className="flex pt-3 items-center gap-2">
               <label className="text-sm font-medium whitespace-nowrap">
                 Apply to all
               </label>
@@ -549,29 +559,49 @@ const AttendanceTab = () => {
                 type="date"
                 value={selectedDate}
                 onChange={(e) => setSelectedDate(e.target.value)}
-                className="border focus:outline-none px-2 py-1 rounded text-sm mt-1"
+                className="border border-gray-200 rounded-xl px-3 py-2 text-sm 
+           max-w-[180px]
+           bg-white/80 backdrop-blur-sm
+           focus:outline-none 
+           focus:ring-2 focus:ring-[var(--primary)]/20 
+           focus:border-[var(--primary)] 
+           transition"
               />
             </div>
+          </div>
+          {/* Search Worker */}
+          <div className="mb-3 w-full">
+            <input
+              type="text"
+              placeholder="Search worker..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full px-4 py-2.5 rounded-xl border border-gray-200 
+               text-sm bg-white/80 backdrop-blur-sm
+               focus:outline-none focus:ring-2 
+               focus:ring-[var(--primary)]/20 
+               focus:border-[var(--primary)]
+               transition"
+            />
           </div>
 
           {loading ? (
             <div className="flex justify-center py-10">
               <Loader className="w-10 h-10 animate-spin primary-font" />
             </div>
-          ) : workers.length === 0 ? (
-            <p className="text-gray-500">No workers added yet.</p>
+          ) : searchedWorkers.length === 0 ? (
+            <div className="text-center text-sm text-gray-500 py-10">
+              {searchQuery
+                ? "No matching worker found."
+                : "No active workers available for attendance."}
+            </div>
           ) : (
             <div
-              className="space-y-4 overflow-y-auto no-scrollbar"
               ref={scrollRef}
-              style={{
-                maxHeight: "calc(100vh - 240px)", // adjust if needed
-                scrollBehavior: "smooth",
-                paddingBottom: "70px",
-              }}
               onScroll={handleScrollShadow}
+              className="flex-1 overflow-y-auto no-scrollbar space-y-4 px-1"
             >
-              {workers.map((w) => {
+              {searchedWorkers.map((w) => {
                 let hours = "--";
 
                 if (w.hoursWorked && w.hoursWorked > 0) {
@@ -598,7 +628,10 @@ const AttendanceTab = () => {
                   <div
                     id={`worker-${w._id}`}
                     key={w._id}
-                    className="bg-white shadow rounded-lg p-3 space-y-3 cursor-pointer transition-all"
+                    className="bg-white/80 backdrop-blur-md rounded-2xl p-4 space-y-4 cursor-pointer
+           transition-all duration-200
+           border border-gray-200/60
+           hover:shadow-md active:scale-[0.99]"
                     onClick={() => {
                       setWorkers((prev) =>
                         prev.map((x) =>
@@ -647,7 +680,7 @@ const AttendanceTab = () => {
                         className="flex flex-col space-y-1"
                         onClick={(e) => e.stopPropagation()}
                       >
-                        <label className="text-[10px] text-gray-500">
+                        <label className="text-[11px] font-medium text-gray-500 tracking-wide">
                           Start
                         </label>
                         <input
@@ -656,7 +689,13 @@ const AttendanceTab = () => {
                           onChange={(e) =>
                             updateWorker(w._id, "startTime", e.target.value)
                           }
-                          className="border focus:outline-none p-2 max-w-[120px] rounded text-sm focus:border-[var(--primary)]"
+                          className="border border-gray-200 rounded-xl px-3 py-2 text-sm 
+           max-w-[120px]
+           bg-white/80 backdrop-blur-sm
+           focus:outline-none 
+           focus:ring-2 focus:ring-[var(--primary)]/20 
+           focus:border-[var(--primary)] 
+           transition"
                         />
                       </div>
 
@@ -664,30 +703,37 @@ const AttendanceTab = () => {
                         className="flex flex-col space-y-1"
                         onClick={(e) => e.stopPropagation()}
                       >
-                        <label className="text-[10px] text-gray-500">End</label>
+                        <label className="text-[11px] font-medium text-gray-500 tracking-wide">
+                          End
+                        </label>
                         <input
                           type="time"
                           value={w.endTime || ""}
                           onChange={(e) =>
                             updateWorker(w._id, "endTime", e.target.value)
                           }
-                          className="border focus:outline-none p-2 max-w-[120px] rounded text-sm focus:border-[var(--primary)]"
+                          className="border border-gray-200 rounded-xl px-3 py-2 text-sm 
+           max-w-[120px]
+           bg-white/80 backdrop-blur-sm
+           focus:outline-none 
+           focus:ring-2 focus:ring-[var(--primary)]/20 
+           focus:border-[var(--primary)] 
+           transition"
                         />
                       </div>
                     </div>
 
                     {/* EXPANDABLE ZONE */}
                     <div
-                      className={`transition-all duration-300 overflow-hidden ${
-                        isExpanded
-                          ? "max-h-[500px] opacity-100"
-                          : "max-h-0 opacity-0"
-                      }`}
+                      className={`transition-[max-height,opacity] duration-300 ease-in-out
+ overflow-hidden ${
+   isExpanded ? "max-h-[500px] opacity-100" : "max-h-0 opacity-0"
+ }`}
                       onClick={(e) => e.stopPropagation()}
                     >
                       {/* Rate */}
                       <div className="flex flex-col space-y-1 mt-2">
-                        <label className="text-[10px] text-gray-500">
+                        <label className="text-[11px] font-medium text-gray-500 tracking-wide">
                           Rate (₹)
                         </label>
                         <input
@@ -698,13 +744,15 @@ const AttendanceTab = () => {
                           onChange={(e) =>
                             updateWorker(w._id, "rate", Number(e.target.value))
                           }
-                          className="border p-2 rounded text-sm focus:border-[var(--primary)]"
+                          className="border border-gray-200 rounded-xl px-3 py-2 text-sm 
+           focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/20 
+           focus:border-[var(--primary)] transition"
                         />
                       </div>
 
                       {/* Hours Worked (Direct input alternative) */}
                       <div className="flex flex-col space-y-1 mt-2">
-                        <label className="text-[10px] text-gray-500">
+                        <label className="text-[11px] font-medium text-gray-500 tracking-wide">
                           Hours Worked
                         </label>
                         <input
@@ -720,7 +768,9 @@ const AttendanceTab = () => {
                               Number(e.target.value)
                             )
                           }
-                          className="border p-2 rounded text-sm focus:border-[var(--primary)]"
+                          className="border border-gray-200 rounded-xl px-3 py-2 text-sm 
+           focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/20 
+           focus:border-[var(--primary)] transition"
                         />
                         <small className="text-[10px] text-gray-400">
                           Leave blank if using start/end time
@@ -730,7 +780,7 @@ const AttendanceTab = () => {
                       {/* Rest & Missing */}
                       <div className="grid grid-cols-2 gap-3 mt-2">
                         <div className="flex flex-col space-y-1">
-                          <label className="text-[10px] text-gray-500">
+                          <label className="text-[11px] font-medium text-gray-500 tracking-wide">
                             Rest Mins
                           </label>
                           <input
@@ -744,12 +794,14 @@ const AttendanceTab = () => {
                                 Number(e.target.value)
                               )
                             }
-                            className="border p-2 rounded text-sm focus:border-[var(--primary)]"
+                            className="border border-gray-200 rounded-xl px-3 py-2 text-sm 
+           focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/20 
+           focus:border-[var(--primary)] transition"
                           />
                         </div>
 
                         <div className="flex flex-col space-y-1">
-                          <label className="text-[10px] text-gray-500">
+                          <label className="text-[11px] font-medium text-gray-500 tracking-wide">
                             Missing Mins
                           </label>
                           <input
@@ -763,14 +815,16 @@ const AttendanceTab = () => {
                                 Number(e.target.value)
                               )
                             }
-                            className="border p-2 rounded text-sm focus:border-[var(--primary)]"
+                            className="border border-gray-200 rounded-xl px-3 py-2 text-sm 
+           focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/20 
+           focus:border-[var(--primary)] transition"
                           />
                         </div>
                       </div>
 
                       {/* Note */}
                       <div className="flex flex-col space-y-1 mt-2">
-                        <label className="text-[10px] text-gray-500">
+                        <label className="text-[11px] font-medium text-gray-500 tracking-wide">
                           Note
                         </label>
                         <input
@@ -780,13 +834,15 @@ const AttendanceTab = () => {
                           onChange={(e) =>
                             updateWorker(w._id, "note", e.target.value)
                           }
-                          className="border p-2 rounded text-sm focus:border-[var(--primary)]"
+                          className="border border-gray-200 rounded-xl px-3 py-2 text-sm 
+           focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/20 
+           focus:border-[var(--primary)] transition"
                         />
                       </div>
 
                       {/* Remarks */}
                       <div className="flex flex-col space-y-1 mt-2">
-                        <label className="text-[10px] text-gray-500">
+                        <label className="text-[11px] font-medium text-gray-500 tracking-wide">
                           Remarks
                         </label>
                         <input
@@ -796,7 +852,9 @@ const AttendanceTab = () => {
                           onChange={(e) =>
                             updateWorker(w._id, "remarks", e.target.value)
                           }
-                          className="border p-2 rounded text-sm focus:border-[var(--primary)]"
+                          className="border border-gray-200 rounded-xl px-3 py-2 text-sm 
+           focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/20 
+           focus:border-[var(--primary)] transition"
                         />
                       </div>
 
@@ -812,15 +870,26 @@ const AttendanceTab = () => {
             </div>
           )}
 
-          {/* Save Button */}
-          <button
-            className={`w-full py-3 rounded-lg text-white font-bold 
-  sticky bottom-8 z-10 mt-5 
-  ${saving ? "bg-orange-300" : "primary-bg"}`}
-            onClick={handleSaveAttendance}
+          {/* footer */}
+          <div
+            className="sticky bottom-0 z-30
+  bg-white
+  border-t rounded-2xl border-gray-200
+  px-4 pt-1 pb-6
+  "
           >
-            {saving ? "Saving..." : "Save Attendance"}
-          </button>
+            <div className="shrink-0 bg-white  px-4 py-4">
+              <button
+                className={`w-full py-3.5 rounded-2xl text-white text-base font-semibold 
+      shadow-lg shadow-orange-200/40
+      active:scale-[0.97] transition-all
+      ${saving ? "bg-orange-300" : "primary-bg"}`}
+                onClick={handleSaveAttendance}
+              >
+                {saving ? "Saving..." : "Save Attendance"}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -836,7 +905,8 @@ const AttendanceTab = () => {
             <div className="relative bg-white/70 backdrop-blur-md shadow-sm border border-gray-100 rounded-full p-1 flex items-center justify-between gap-1">
               {/* Sliding active background */}
               <div
-                className={`absolute top-1 bottom-1 w-1/3 rounded-full transition-all duration-300
+                className={`absolute top-1 bottom-1 w-1/3 rounded-full transition-[max-height,opacity] duration-300 ease-in-out
+
       bg-gradient-to-r  primary-bg shadow-md`}
                 style={{
                   left:
@@ -1106,7 +1176,8 @@ const AttendanceTab = () => {
               return (
                 <div
                   key={dateKey}
-                  className="bg-white shadow-lg rounded-2xl p-4 border border-gray-100 space-y-3"
+                  className="bg-white rounded-3xl p-5 border border-gray-100 
+           shadow-sm hover:shadow-md transition"
                 >
                   {/* Header / Accordion Toggle */}
                   {/* Header / Accordion Toggle */}
@@ -1139,11 +1210,10 @@ const AttendanceTab = () => {
 
                   {/* Animated content */}
                   <div
-                    className={`transition-all duration-300 ease-out origin-top ${
-                      isExpanded
-                        ? "max-h-[1000px] opacity-100"
-                        : "max-h-0 opacity-0"
-                    } overflow-hidden`}
+                    className={`transition-[max-height,opacity] duration-300 ease-in-out
+ ease-out origin-top ${
+   isExpanded ? "max-h-[1000px] opacity-100" : "max-h-0 opacity-0"
+ } overflow-hidden`}
                   >
                     <div className="mt-3 space-y-3">
                       {records.map((item) => {
@@ -1249,7 +1319,7 @@ const AttendanceTab = () => {
       {/* EDIT MODAL */}
       {editModalOpen && (
         <div className="fixed inset-0 backdrop-blur-sm bg-black/40 flex items-center justify-center z-50">
-          <div className="bg-white rounded-2xl shadow-xl w-[90%] max-w-md p-4 space-y-3">
+          <div className="bg-white rounded-2xl shadow-xl w-[90%] max-w-md p-5 animate-scaleIn space-y-3">
             <div className="flex justify-between items-center mb-1">
               <h2 className="font-semibold text-gray-800 text-base">
                 Edit Attendance

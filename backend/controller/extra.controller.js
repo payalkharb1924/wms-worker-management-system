@@ -35,7 +35,7 @@ export const createExtra = async (req, res) => {
       return res.status(400).json({
         msg: `Cannot add extra before or on ${
           lastSettledDate.toISOString().split("T")[0]
-        }`,
+        }  because already settled till here.`,
       });
     }
 

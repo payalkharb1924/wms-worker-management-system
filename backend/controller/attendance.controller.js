@@ -55,7 +55,7 @@ export const createAttendance = async (req, res) => {
       return res.status(400).json({
         msg: `Cannot add attendance before or on ${
           blockedTill.toISOString().split("T")[0]
-        }`,
+        } because already settled till here.`,
       });
     }
 
