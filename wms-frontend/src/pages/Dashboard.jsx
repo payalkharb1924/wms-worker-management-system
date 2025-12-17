@@ -8,6 +8,8 @@ import AttendanceTab from "../components/AttendanceTab.jsx";
 import AdvancesTab from "../components/AdvancesTab.jsx";
 import ExtrasTab from "../components/ExtrasTab.jsx";
 import SummaryTab from "../components/SummaryTab.jsx";
+import DemoTour from "../components/DemoTour.jsx";
+import { demoSteps } from "../demo/demoSteps.js";
 
 const Dashboard = () => {
   const { user, token } = useSelector((state) => state.auth);
@@ -16,6 +18,8 @@ const Dashboard = () => {
 
   const [activeTab, setActiveTab] = useState("Workers");
   const [menuOpen, setMenuOpen] = useState(false);
+
+  const [runDemo, setRunDemo] = useState(false);
 
   const dispatch = useDispatch();
   const navigate = useNavigate();
@@ -31,8 +35,34 @@ const Dashboard = () => {
     navigate("/login");
   };
 
+  useEffect(() => {
+    const seen = localStorage.getItem("hasSeenDemo");
+
+    if (!seen && token) {
+      setTimeout(() => {
+        setRunDemo(true);
+      }, 1200); // ⬅️ IMPORTANT
+    }
+  }, [token]);
+
   return (
     <div className="min-h-screen primary-bg p-5 flex flex-col">
+      {/* 🔥 Guided Demo (runs only first time) */}
+      <DemoTour
+        run={runDemo}
+        steps={demoSteps}
+        onStepChange={(index) => {
+          const step = demoSteps[index];
+          if (step?.tab) {
+            setActiveTab(step.tab);
+          }
+        }}
+        onFinish={() => {
+          localStorage.setItem("hasSeenDemo", "true");
+          setRunDemo(false);
+        }}
+      />
+
       {/* Header */}
       <div className="flex justify-between items-center text-white mb-6">
         <div>
@@ -64,16 +94,26 @@ const Dashboard = () => {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-2 overflow-x-auto scroll-hide pb-4">
+      <div
+        className="flex gap-2 overflow-x-auto overflow-y-hidden scroll-hide pb-4"
+        style={{ overscrollBehavior: "contain" }}
+      >
         {tabs.map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
-            className={`px-4 py-2 rounded-lg text-sm font-semibold whitespace-nowrap ${
-              activeTab === tab
-                ? "bg-white primary-font shadow-md"
-                : "bg-black/10 text-white"
-            }`}
+            data-tour={`nav-${tab.toLowerCase()}`}
+            className={`px-4 py-2 rounded-lg text-sm font-semibold whitespace-nowrap
+        ${tab === "Workers" ? "nav-workers" : ""}
+        ${tab === "Attendance" ? "nav-attendance" : ""}
+        ${tab === "Advances" ? "nav-advances" : ""}
+        ${tab === "Extras" ? "nav-extras" : ""}
+        ${tab === "Summary" ? "nav-summary" : ""}
+        ${
+          activeTab === tab
+            ? "bg-white text-gray-900 shadow-md"
+            : "bg-black/10 text-white"
+        }`}
           >
             {tab}
           </button>

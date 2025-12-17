@@ -90,6 +90,16 @@ const Login = () => {
             )}
           </button>
         </form>
+        {/* Footer link */}
+        <p className="text-sm text-gray-600 text-center mt-6">
+          New here?{" "}
+          <button
+            onClick={() => navigate("/signup")}
+            className="font-semibold text-[var(--primary)] hover:underline"
+          >
+            Create an account
+          </button>
+        </p>
       </div>
     </div>
   );

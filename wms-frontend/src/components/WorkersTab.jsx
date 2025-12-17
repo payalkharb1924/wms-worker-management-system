@@ -85,6 +85,8 @@ const WorkersTab = () => {
     try {
       await api.post("/workers", form);
       toast.success("Worker added!");
+      window.dispatchEvent(new Event("demo:next"));
+
       setShowForm(false);
       setForm({ name: "", remarks: "" });
       fetchWorkers();
@@ -186,8 +188,14 @@ const WorkersTab = () => {
       <div className="flex justify-between items-center mb-5">
         <h3 className="text-lg font-bold">Workers</h3>
         <button
-          onClick={() => setShowForm(true)}
-          className="primary-bg text-white px-4 py-2.5 rounded-xl text-sm font-semibold shadow-sm active:scale-95 transition"
+          onClick={() => {
+            setShowForm(true);
+
+            setTimeout(() => {
+              window.dispatchEvent(new Event("demo:next"));
+            }, 50); // 👈 wait for DOM mount
+          }}
+          className="add-worker-btn primary-bg text-white px-4 py-2.5 rounded-xl text-sm font-semibold shadow-sm active:scale-95 transition"
         >
           + Add Worker
         </button>
@@ -201,14 +209,16 @@ const WorkersTab = () => {
         <p className="text-gray-500 text-sm">No workers added yet.</p>
       ) : (
         <div className="space-y-3">
-          {workers.map((w) => (
+          {workers.map((w, index) => (
             <div
               key={w._id}
               onClick={() => openWorkerDetails(w)}
-              className="p-4 bg-white rounded-2xl flex justify-between items-start cursor-pointer
+              className={`p-4 bg-white rounded-2xl flex justify-between items-start cursor-pointer
 border border-gray-200/80
 hover:shadow-md hover:bg-white
-transition-all duration-200 active:scale-[0.99]"
+transition-all duration-200 active:scale-[0.99] ${
+                index === 0 ? "worker-card" : ""
+              }`}
             >
               <div className="flex flex-col space-y-1">
                 <p className="font-semibold text-gray-800 text-sm">{w.name}</p>
@@ -236,12 +246,12 @@ transition-all duration-200 active:scale-[0.99]"
       {showForm && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex justify-center items-center z-50">
           <div className="bg-white p-6 rounded-2xl w-[90%] max-w-sm shadow-xl space-y-3">
-            <h3 className="font-bold mb-3 text-lg">Add Worker</h3>
+            <h3 className="font-bold mb-3 text-lg ">Add Worker</h3>
             <form onSubmit={handleSubmit} className="space-y-3">
               <input
                 type="text"
                 placeholder="Worker Name"
-                className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm
+                className="worker-name-input w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm
 focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/20
 focus:border-[var(--primary)] transition
 "
@@ -253,7 +263,7 @@ focus:border-[var(--primary)] transition
               <input
                 type="text"
                 placeholder="Remarks (optional)"
-                className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm
+                className="worker-remarks-input w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm
 focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/20
 focus:border-[var(--primary)] transition
 "
@@ -264,7 +274,7 @@ focus:border-[var(--primary)] transition
               <div className="flex gap-3 pt-3">
                 <button
                   type="submit"
-                  className={`text-white px-4 py-2 rounded-md w-full ${
+                  className={`save-worker-btn text-white px-4 py-2 rounded-md w-full ${
                     loading ? "bg-orange-300 cursor-not-allowed" : "primary-bg"
                   }`}
                 >
@@ -315,7 +325,7 @@ focus:border-[var(--primary)] transition
                 </div>
                 <div className="flex gap-2 mt-4">
                   <button
-                    className="bg-blue-800 text-white flex-1 py-2.5 rounded-xl font-semibold active:scale-95 transition"
+                    className="edit-worker-btn bg-blue-800 text-white flex-1 py-2.5 rounded-xl font-semibold active:scale-95 transition"
                     onClick={() => {
                       setEditing(true);
                       setEditForm({
@@ -328,7 +338,7 @@ focus:border-[var(--primary)] transition
                     Edit
                   </button>
                   <button
-                    className="bg-red-500 text-white flex-1 py-2.5 rounded-xl font-semibold active:scale-95 transition"
+                    className="delete-worker-btn bg-red-500 text-white flex-1 py-2.5 rounded-xl font-semibold active:scale-95 transition"
                     onClick={() => setShowDeleteConfirm(true)}
                     disabled={deleteLoading}
                   >

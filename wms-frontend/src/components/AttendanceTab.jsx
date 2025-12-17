@@ -137,6 +137,7 @@ const AttendanceTab = () => {
         await api.post("/attendance/add", entry);
       }
       toast.success("Attendance saved successfully!");
+      window.dispatchEvent(new Event("demo:attendance-saved"));
       resetAttendanceFields();
     } catch (error) {
       toast.error(error.response?.data?.msg || "Failed to save attendance");
@@ -402,13 +403,17 @@ const AttendanceTab = () => {
   const handleTouchEnd = (id) => {
     const offset = swipeOffsets[id] || 0;
 
-    // decide final position: open or closed
     const finalOffset = offset <= -40 ? -80 : 0;
 
     setSwipeOffsets((prev) => ({
       ...prev,
       [id]: finalOffset,
     }));
+
+    // 🔥 DEMO EVENT: user successfully swiped
+    if (finalOffset === -80) {
+      window.dispatchEvent(new Event("demo:attendance-swiped"));
+    }
 
     delete touchDataRef.current[id];
     cancelLongPress();
@@ -488,6 +493,7 @@ const AttendanceTab = () => {
         prev.map((item) => (item._id === updated._id ? updated : item))
       );
       toast.success("Attendance updated");
+      window.dispatchEvent(new Event("demo:attendance-edited"));
       closeEditModal();
     } catch (err) {
       console.error(err);
@@ -576,7 +582,7 @@ const AttendanceTab = () => {
               placeholder="Search worker..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full px-4 py-2.5 rounded-xl border border-gray-200 
+              className="attendance-search w-full px-4 py-2.5 rounded-xl border border-gray-200 
                text-sm bg-white/80 backdrop-blur-sm
                focus:outline-none focus:ring-2 
                focus:ring-[var(--primary)]/20 
@@ -601,7 +607,7 @@ const AttendanceTab = () => {
               onScroll={handleScrollShadow}
               className="flex-1 overflow-y-auto no-scrollbar space-y-4 px-1"
             >
-              {searchedWorkers.map((w) => {
+              {searchedWorkers.map((w, index) => {
                 let hours = "--";
 
                 if (w.hoursWorked && w.hoursWorked > 0) {
@@ -628,10 +634,12 @@ const AttendanceTab = () => {
                   <div
                     id={`worker-${w._id}`}
                     key={w._id}
-                    className="bg-white/80 backdrop-blur-md rounded-2xl p-4 space-y-4 cursor-pointer
+                    className={`bg-white/80 backdrop-blur-md rounded-2xl p-4 space-y-4 cursor-pointer
            transition-all duration-200
            border border-gray-200/60
-           hover:shadow-md active:scale-[0.99]"
+           hover:shadow-md active:scale-[0.99] ${
+             index === 0 ? "attendance-card" : ""
+           }`}
                     onClick={() => {
                       setWorkers((prev) =>
                         prev.map((x) =>
@@ -1235,7 +1243,7 @@ const AttendanceTab = () => {
                             {!item.isSettled && (
                               <div className="absolute inset-0 right-0 flex items-center justify-end overflow-hidden">
                                 <button
-                                  className="w-20 h-full rounded-r-xl bg-red-500 text-white font-bold text-[13px] tracking-wide flex items-center justify-center active:scale-95"
+                                  className="delete-attendance-btn w-20 h-full rounded-r-xl bg-red-500 text-white font-bold text-[13px] tracking-wide flex items-center justify-center active:scale-95"
                                   onClick={() => setConfirmDeleteId(item._id)}
                                 >
                                   Delete
@@ -1247,7 +1255,7 @@ const AttendanceTab = () => {
                             <div
                               className={`${getCardStyle(
                                 item
-                              )} p-3 flex items-start justify-between rounded-xl shadow-sm transition-transform duration-200 ease-out no-select relative`}
+                              )} p-3 flex items-start justify-between rounded-xl shadow-sm transition-transform duration-200 ease-out no-select relative history-attendance-card`}
                               style={{
                                 transform: `translateX(${offset}px)`,
                                 pointerEvents: item.isSettled ? "none" : "auto",

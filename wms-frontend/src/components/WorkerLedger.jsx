@@ -111,7 +111,7 @@ const WorkerLedger = ({
         <button
           disabled={isAllClear || summaryLoading}
           onClick={onSettleClick}
-          className={`px-4 py-2 rounded-lg text-sm font-semibold shadow-sm ${
+          className={`settle-worker-btn px-4 py-2 rounded-lg text-sm font-semibold shadow-sm ${
             isAllClear || summaryLoading
               ? "bg-gray-200 text-gray-500 cursor-not-allowed"
               : "primary-bg text-white active:scale-95 transition"

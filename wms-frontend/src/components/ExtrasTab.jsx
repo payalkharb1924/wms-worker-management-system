@@ -131,6 +131,7 @@ const ExtrasTab = () => {
       });
 
       toast.success("Extra saved successfully!");
+      window.dispatchEvent(new Event("demo:extra-added"));
 
       // Reset only fields except worker + date
       setDailyItemName("");

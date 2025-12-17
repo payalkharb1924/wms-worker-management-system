@@ -279,6 +279,11 @@ const SummaryTab = () => {
       </div>
     );
   };
+  useEffect(() => {
+    if (viewMode === "insights") {
+      window.dispatchEvent(new Event("demo:summary-opened"));
+    }
+  }, [viewMode]);
 
   // ---------- UI ----------
   return (
@@ -319,7 +324,7 @@ const SummaryTab = () => {
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 placeholder="Search settlements by worker, date, note, amount..."
-                className="w-full bg-transparent outline-none border-none text-sm text-gray-800 placeholder:text-gray-400"
+                className="summary-search w-full bg-transparent outline-none border-none text-sm text-gray-800 placeholder:text-gray-400"
               />
             </div>
           </div>
@@ -379,7 +384,7 @@ const SummaryTab = () => {
                         <button
                           key={s._id}
                           onClick={() => openModal(s)}
-                          className="w-full text-left group"
+                          className="settlement-card w-full text-left group"
                         >
                           <div className="flex items-center gap-3 rounded-2xl bg-white/80 backdrop-blur-lg border border-gray-200 px-3 py-2.5 shadow-[0_18px_45px_rgba(15,23,42,0.12)] hover:bg-white active:scale-[0.99] transition">
                             {/* Avatar */}
@@ -494,9 +499,9 @@ const SummaryTab = () => {
           )}
 
           {!insightsLoading && insightsData && (
-            <div className="rounded-3xl bg-white/85 border border-gray-200 shadow-[0_22px_60px_rgba(15,23,42,0.10)] p-3">
+            <div className="summary-insights rounded-3xl bg-white/85 border border-gray-200 shadow-[0_22px_60px_rgba(15,23,42,0.10)] p-3">
               {/* Responsive graph container */}
-              <div className="h-[300px]">
+              <div className="h-[300px] insights-chart">
                 {selectedInsight === "pendingVsSettled" && (
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>

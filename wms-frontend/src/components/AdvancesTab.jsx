@@ -127,6 +127,7 @@ const AdvancesTab = () => {
       });
 
       toast.success("Advance saved successfully!");
+      window.dispatchEvent(new Event("demo:advance-added"));
 
       // Reset only amount + note, keep worker and date for fast repeat
       setDailyAmount("");
