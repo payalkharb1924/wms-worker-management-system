@@ -10,13 +10,8 @@ export const demoSteps = [
     content: "Tap here to add your first worker.",
     allowClicks: true,
     waitFor: "manual",
-    placement: "bottom",
-    floaterProps: {
-      disableFlip: true,
-      placement: "bottom",
-    },
+    placement: "bottom-start",
   },
-
   {
     target: ".worker-name-input",
     content: "Enter worker name here.",

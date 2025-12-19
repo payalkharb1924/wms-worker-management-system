@@ -145,3 +145,67 @@ input:checked + .toggle-slider:before {
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
+
+/* ================= SHEPHERD CUSTOM THEME ================= */
+
+/* Tooltip container */
+.shepherd-element {
+  max-width: 260px !important;
+  width: 260px !important;
+
+  background: rgba(255, 255, 255, 0.88) !important;
+  backdrop-filter: blur(16px) !important;
+
+  border-radius: 16px !important;
+  padding: 14px !important;
+
+  box-shadow: 0 20px 45px rgba(0, 0, 0, 0.2) !important;
+}
+
+/* Text */
+.shepherd-text {
+  font-size: 14px !important;
+  color: #1f2937 !important;
+  line-height: 1.5 !important;
+}
+
+/* Footer */
+.shepherd-footer {
+  display: flex !important;
+  justify-content: space-between !important;
+  margin-top: 10px !important;
+}
+
+/* Buttons reset */
+.shepherd-button {
+  background: none !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+/* Primary button */
+.shepherd-button-primary {
+  background: #fe8216 !important;
+  color: #fff !important;
+  border-radius: 10px !important;
+  padding: 6px 14px !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+}
+
+/* Close icon */
+.shepherd-cancel-icon {
+  color: #6b7280 !important;
+}
+
+/* Highlight halo */
+.shepherd-highlight {
+  outline: 3px solid rgba(254, 130, 22, 0.7) !important;
+  outline-offset: 10px !important;
+  border-radius: 14px !important;
+}
+
+/* Overlay softness */
+.shepherd-modal-overlay-container {
+  background: rgba(0, 0, 0, 0.45) !important;
+}

@@ -1,0 +1,64 @@
+/* ================================
+   SHEPHERD OVERRIDES (FINAL)
+================================ */
+
+/* Kill default width behavior */
+.shepherd-element {
+  max-width: 260px !important;
+  width: 260px !important;
+  padding: 14px !important;
+
+  background: rgba(255, 255, 255, 0.88) !important;
+  backdrop-filter: blur(14px) !important;
+
+  border-radius: 16px !important;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.18) !important;
+}
+
+/* Text */
+.shepherd-text {
+  font-size: 14px !important;
+  color: #1f2937 !important;
+  line-height: 1.45 !important;
+}
+
+/* Footer layout */
+.shepherd-footer {
+  display: flex !important;
+  justify-content: space-between !important;
+  margin-top: 10px !important;
+}
+
+/* KILL default button styles */
+.shepherd-button {
+  background: none !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+/* Primary button */
+.shepherd-button-primary {
+  background: #fe8216 !important;
+  color: #fff !important;
+  border-radius: 10px !important;
+  padding: 6px 14px !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+}
+
+.shepherd-button-primary:hover {
+  background: #ea580c !important;
+}
+
+/* Cancel button */
+.shepherd-button-secondary {
+  color: #6b7280 !important;
+  font-size: 12px !important;
+}
+
+/* Highlight ring */
+.shepherd-highlight {
+  outline: 3px solid rgba(249, 115, 22, 0.65) !important;
+  outline-offset: 10px !important;
+  border-radius: 16px !important;
+}

@@ -14,16 +14,6 @@ import { speak } from "../utils/speak";
 const DemoTour = ({ run, steps, onFinish, onStepChange }) => {
   const [stepIndex, setStepIndex] = useState(0);
 
-  // 🔒 Lock body scroll during demo (fixes tab-scroll bug)
-  useEffect(() => {
-    if (run) {
-      document.body.style.overflow = "hidden";
-    } else {
-      document.body.style.overflow = "";
-    }
-    return () => (document.body.style.overflow = "");
-  }, [run]);
-
   // 🔊 Voice guidance
   useEffect(() => {
     if (!run) return;
@@ -73,10 +63,10 @@ const DemoTour = ({ run, steps, onFinish, onStepChange }) => {
         continuous={false}
         showSkipButton
         disableOverlayClose
-        disableScrolling
         spotlightClicks={steps[stepIndex]?.allowClicks}
         callback={handleJoyride}
         tooltipComponent={CustomTooltip}
+        scrollToFirstStep={false}
         styles={{
           options: {
             zIndex: 10000,
@@ -84,15 +74,10 @@ const DemoTour = ({ run, steps, onFinish, onStepChange }) => {
           },
         }}
         floaterProps={{
-          boundary: "viewport", // 🔥 VERY IMPORTANT
-          offset: 12,
+          boundary: "viewport",
+          offset: 8,
           disableFlip: false,
-          placement: "auto",
-          styles: {
-            floater: {
-              maxWidth: "92vw",
-            },
-          },
+          placement: "bottom", // 👈 prefer bottom
         }}
       />
 
@@ -119,17 +104,18 @@ const CustomTooltip = ({ step, index, size, skipProps }) => {
 
   return (
     <div
+      className="bg-white rounded-xl shadow-xl p-3"
       style={{
-        maxWidth: "92vw",
-        marginInline: "auto",
+        maxWidth: "260px", // 👈 HARD LIMIT
+        width: "260px",
+        boxSizing: "border-box",
       }}
-      className="rounded-2xl bg-white backdrop-blur-xl shadow-2xl p-4"
     >
-      <div className="text-xs text-gray-500 mb-1">
+      <div className="text-[11px] text-gray-500 mb-1">
         Step {index + 1} of {size}
       </div>
 
-      <div className="text-sm font-medium text-gray-800 mb-4">
+      <div className="text-sm font-medium text-gray-800 mb-3">
         {step.content}
       </div>
 
@@ -141,7 +127,7 @@ const CustomTooltip = ({ step, index, size, skipProps }) => {
         {!isActionStep && (
           <button
             onClick={() => window.dispatchEvent(new Event("demo:next"))}
-            className="px-4 py-2 rounded-xl bg-orange-500 text-white text-sm font-semibold"
+            className="px-3 py-1.5 rounded-lg bg-orange-500 text-white text-xs font-semibold"
           >
             Next
           </button>
