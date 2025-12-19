@@ -84,16 +84,13 @@ const DemoTour = ({ run, steps, onFinish, onStepChange }) => {
           },
         }}
         floaterProps={{
-          boundary: "viewport",
+          boundary: "viewport", // 🔥 VERY IMPORTANT
           offset: 12,
           disableFlip: false,
+          placement: "auto",
           styles: {
             floater: {
               maxWidth: "92vw",
-            },
-            arrow: {
-              length: 8,
-              spread: 12,
             },
           },
         }}
@@ -121,27 +118,26 @@ const CustomTooltip = ({ step, index, size, skipProps }) => {
   const isActionStep = !!step.waitFor;
 
   return (
-    <div className="max-w-[90vw] mx-auto rounded-2xl bg-white backdrop-blur-xl shadow-2xl p-4">
-      {/* Progress */}
+    <div
+      style={{
+        maxWidth: "92vw",
+        marginInline: "auto",
+      }}
+      className="rounded-2xl bg-white backdrop-blur-xl shadow-2xl p-4"
+    >
       <div className="text-xs text-gray-500 mb-1">
         Step {index + 1} of {size}
       </div>
 
-      {/* Content */}
       <div className="text-sm font-medium text-gray-800 mb-4">
         {step.content}
       </div>
 
-      {/* Actions */}
       <div className="flex justify-between items-center">
-        <button
-          {...skipProps}
-          className="text-xs text-gray-500 hover:text-gray-800"
-        >
+        <button {...skipProps} className="text-xs text-gray-500">
           Skip
         </button>
 
-        {/* 👇 Show Next ONLY for non-action steps */}
         {!isActionStep && (
           <button
             onClick={() => window.dispatchEvent(new Event("demo:next"))}
