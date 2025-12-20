@@ -6,13 +6,6 @@ import WorkerLedger from "./WorkerLedger.jsx";
 import { goToNextTourStep } from "../tour/useShepherdTour.js";
 import { createAttendanceTour } from "../tour/useAttendanceTour";
 
-const startAttendanceTour = () => {
-  setTimeout(() => {
-    const tour = createAttendanceTour();
-    tour.start();
-  }, 500);
-};
-
 const WorkersTab = () => {
   const [workers, setWorkers] = useState([]);
   const [showForm, setShowForm] = useState(false);
@@ -371,10 +364,7 @@ focus:border-[var(--primary)] transition
                 </div>
 
                 <button
-                  onClick={() => {
-                    setShowDetails(false);
-                    startAttendanceTour();
-                  }}
+                  onClick={() => setShowDetails(false)}
                   className="w-full mt-3 py-2 bg-gray-200 rounded-md text-sm font-medium"
                 >
                   Close

@@ -24,20 +24,18 @@ export const createAttendanceTour = () => {
     },
   });
 
-  /* ---------------- STEP 1: Attendance tab (EVENT ONLY) ---------------- */
-
   attendanceTour.addStep({
-    id: "attendance-tab",
-    text: "Tap Attendance to start marking daily work.",
+    id: "attendance-entry",
+    text: "This is where you mark your workers’ daily attendance.",
     attachTo: { element: ".tab-attendance", on: "bottom" },
-    buttons: [], // ⛔ no Next
+    buttons: [
+      {
+        text: "Next",
+        classes: "shepherd-button shepherd-button-primary",
+        action: attendanceTour.next,
+      },
+    ],
   });
-
-  window.addEventListener(
-    attendanceEvents.opened,
-    () => attendanceTour.next(),
-    { once: true }
-  );
 
   /* ---------------- STEP 2: Daily vs History ---------------- */
 

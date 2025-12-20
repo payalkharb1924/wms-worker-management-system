@@ -76,6 +76,10 @@ You can view past extras using:
         action: () => {
           extraTour.complete();
           localStorage.setItem("tour.extra.completed", "true");
+
+          setTimeout(() => {
+            window.dispatchEvent(new Event("demo:extra-tour-finished"));
+          }, 300);
         },
       },
     ],

@@ -26,6 +26,8 @@ import {
 } from "recharts";
 import { requestNotificationPermission } from "../firebase";
 
+import { createSummaryTour } from "../tour/summaryTour";
+
 const INSIGHT_OPTIONS = [
   { value: "pendingVsSettled", label: "Pending vs Settled amounts" },
   { value: "monthlyWageTrend", label: "Monthly wage expense" },
@@ -111,6 +113,18 @@ const SummaryTab = () => {
 
   useEffect(() => {
     fetchSettlements();
+  }, []);
+
+  useEffect(() => {
+    const handler = () => {
+      if (localStorage.getItem("tour.summary.completed")) return;
+
+      const tour = createSummaryTour({ setViewMode });
+      setTimeout(() => tour.start(), 300);
+    };
+
+    window.addEventListener("demo:start-summary-tour", handler);
+    return () => window.removeEventListener("demo:start-summary-tour", handler);
   }, []);
 
   // lazily load insights when user switches to that tab first time
@@ -291,7 +305,7 @@ const SummaryTab = () => {
       {/* Inner tabs: History / Insights */}
       <div className="flex gap-2 mb-4">
         <button
-          className={`flex-1 py-2 rounded-xl text-sm font-semibold transition ${
+          className={`summary-history-tab flex-1 py-2 rounded-xl text-sm font-semibold transition ${
             viewMode === "history"
               ? "primary-bg text-white shadow-lg"
               : "bg-gray-200/80 text-gray-700"
@@ -301,7 +315,7 @@ const SummaryTab = () => {
           Settlement History
         </button>
         <button
-          className={`flex-1 py-2 rounded-xl text-sm font-semibold transition ${
+          className={`summary-insights-tab flex-1 py-2 rounded-xl text-sm font-semibold transition ${
             viewMode === "insights"
               ? "primary-bg text-white shadow-lg"
               : "bg-gray-200/80 text-gray-700"

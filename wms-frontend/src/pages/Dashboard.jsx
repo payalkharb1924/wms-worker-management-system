@@ -66,6 +66,22 @@ const Dashboard = () => {
       window.removeEventListener("demo:advance-tour-finished", handler);
   }, []);
 
+  useEffect(() => {
+    const handler = () => {
+      if (localStorage.getItem("tour.summary.completed")) return;
+
+      setActiveTab("Summary");
+
+      setTimeout(() => {
+        window.dispatchEvent(new Event("demo:start-summary-tour"));
+      }, 400);
+    };
+
+    window.addEventListener("demo:extra-tour-finished", handler);
+    return () =>
+      window.removeEventListener("demo:extra-tour-finished", handler);
+  }, []);
+
   const handleLogout = () => {
     // TODO
     window.__attendanceTourStarted = false;
@@ -75,22 +91,6 @@ const Dashboard = () => {
 
   const handleTabChange = (tab) => {
     setActiveTab(tab);
-
-    if (
-      tab === "Attendance" &&
-      localStorage.getItem("tour.dashboard.completed") === "true" &&
-      !localStorage.getItem("tour.attendance.completed") &&
-      !window.__attendanceTourStarted
-    ) {
-      window.__attendanceTourStarted = true;
-
-      const tour = createAttendanceTour();
-
-      setTimeout(() => {
-        tour.start();
-        window.dispatchEvent(new Event("demo:attendance-opened"));
-      }, 400);
-    }
   };
 
   return (

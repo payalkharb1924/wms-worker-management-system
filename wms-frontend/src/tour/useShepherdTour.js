@@ -1,5 +1,6 @@
 // src/tour/useShepherdTour.js
 import Shepherd from "shepherd.js";
+import { createAttendanceTour } from "./useAttendanceTour";
 
 let dashboardTour = null;
 
@@ -50,7 +51,7 @@ export const createDashboardTour = ({ setActiveTab }) => {
     ],
   });
 
-  // STEP 3 — Worker card (appears AFTER creation)
+  // STEP 3 — Worker card
   dashboardTour.addStep({
     id: "worker-card",
     text: "This is your worker. Tap here to view attendance, advances, and settlement details.",
@@ -59,16 +60,24 @@ export const createDashboardTour = ({ setActiveTab }) => {
       {
         text: "Finish",
         classes: "shepherd-button shepherd-button-primary",
-        action: () => dashboardTour.complete(),
+        action: () => {
+          dashboardTour.complete();
+          localStorage.setItem("tour.dashboard.completed", "true");
+
+          // ✅ 1️⃣ Switch tab FIRST
+          setActiveTab("Attendance");
+
+          // ✅ 2️⃣ Wait for Attendance DOM, THEN start tour
+          const wait = setInterval(() => {
+            const toggle = document.querySelector(".attendance-toggle");
+            if (toggle) {
+              clearInterval(wait);
+              createAttendanceTour().start();
+            }
+          }, 100);
+        },
       },
     ],
-  });
-
-  dashboardTour.on("complete", () => {
-    localStorage.setItem("tour.dashboard.completed", "true");
-  });
-  dashboardTour.on("cancel", () => {
-    localStorage.setItem("tour.dashboard.completed", "true");
   });
 
   return dashboardTour;
