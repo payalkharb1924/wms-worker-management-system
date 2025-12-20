@@ -5,4 +5,5 @@ export const attendanceEvents = {
   present: "demo:attendance-present",
   applyAll: "demo:attendance-apply-all",
   saved: "demo:attendance-saved",
+  historyOpened: "demo:attendance-history-opened",
 };

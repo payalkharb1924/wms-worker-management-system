@@ -165,6 +165,21 @@ export const createAttendanceTour = () => {
         action: () => {
           attendanceTour.complete();
           localStorage.setItem("tour.attendance.completed", "true");
+
+          // 👇 START HISTORY TOUR AFTER A SHORT DELAY
+          setTimeout(() => {
+            const historyCompleted = localStorage.getItem(
+              "tour.attendance.history.completed"
+            );
+
+            if (!historyCompleted) {
+              import("./useAttendanceHistoryTour").then(
+                ({ createAttendanceHistoryTour }) => {
+                  createAttendanceHistoryTour().start();
+                }
+              );
+            }
+          }, 400); // small delay = DOM settles
         },
       },
     ],

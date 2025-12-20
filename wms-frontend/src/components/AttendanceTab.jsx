@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef } from "react";
 import api from "../api/axios";
 import { Loader, X, Calendar, ChevronDown, ChevronUp } from "lucide-react";
 import { toast } from "react-toastify";
+import { createAttendanceHistoryGesturesTour } from "../tour/attendanceHistoryGesturesTour";
 
 const AttendanceTab = () => {
   const [workers, setWorkers] = useState([]);
@@ -226,6 +227,31 @@ const AttendanceTab = () => {
       }));
     });
   }, [applyToAll]);
+
+  const startHistoryGesturesTourIfNeeded = () => {
+    const completed = localStorage.getItem(
+      "tour.attendance.history.gestures.completed"
+    );
+
+    if (completed) return;
+
+    // Wait until at least ONE card exists
+    const waitForCard = setInterval(() => {
+      const card = document.querySelector(".history-attendance-card");
+      if (card) {
+        clearInterval(waitForCard);
+        createAttendanceHistoryGesturesTour().start();
+      }
+    }, 120);
+  };
+
+  useEffect(() => {
+    if (viewMode === "history" && history.length > 0) {
+      setTimeout(() => {
+        startHistoryGesturesTourIfNeeded();
+      }, 400); // allow DOM paint
+    }
+  }, [viewMode, history]);
 
   const groupByDate = (entries) => {
     const groups = {};
@@ -538,7 +564,10 @@ const AttendanceTab = () => {
               ? "primary-bg text-white"
               : "bg-gray-200 text-gray-700"
           }`}
-          onClick={() => setViewMode("history")}
+          onClick={() => {
+            setViewMode("history");
+            window.dispatchEvent(new Event("demo:attendance-history-opened"));
+          }}
         >
           History
         </button>
@@ -922,7 +951,7 @@ const AttendanceTab = () => {
       {viewMode === "history" && (
         <div className="space-y-4">
           {/* Filters Card */}
-          <div className="bg-white rounded-xl p-4 shadow-md border border-gray-100">
+          <div className=" bg-white rounded-xl p-4 shadow-md border border-gray-100">
             <p className="text-sm font-semibold text-gray-800">
               View Attendance
             </p>
@@ -983,7 +1012,7 @@ const AttendanceTab = () => {
             </div>
 
             {/* Dynamic Filters */}
-            <div className="bg-white mt-3 rounded-xl p-4 shadow-md border border-gray-100">
+            <div className="history-filters-card bg-white mt-3 rounded-xl p-4 shadow-md border border-gray-100">
               <p className="text-sm font-semibold text-gray-800 mb-3">
                 Filter Attendance
               </p>
@@ -1007,7 +1036,7 @@ const AttendanceTab = () => {
                   <button
                     onClick={fetchAttendanceHistory}
                     disabled={historySearchLoading}
-                    className={`primary-bg text-white px-4 py-2 rounded text-sm col-span-2 
+                    className={`history-filters-info primary-bg text-white px-4 py-2 rounded text-sm col-span-2 
               flex items-center justify-center gap-2 transition ${
                 historySearchLoading ? "opacity-70 cursor-not-allowed" : ""
               }`}
