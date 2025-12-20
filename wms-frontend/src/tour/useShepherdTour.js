@@ -1,35 +1,21 @@
+// src/tour/useShepherdTour.js
 import Shepherd from "shepherd.js";
 
+let dashboardTour = null;
+
 export const createDashboardTour = ({ setActiveTab }) => {
-  const tour = new Shepherd.Tour({
+  dashboardTour = new Shepherd.Tour({
     useModalOverlay: true,
     defaultStepOptions: {
       cancelIcon: { enabled: true },
       scrollTo: false,
       modalOverlayOpeningRadius: 16,
       highlightClass: "shepherd-highlight",
-
-      popperOptions: {
-        modifiers: [
-          {
-            name: "offset",
-            options: {
-              offset: [0, 12],
-            },
-          },
-          {
-            name: "preventOverflow",
-            options: {
-              boundary: "viewport",
-              padding: 12,
-            },
-          },
-        ],
-      },
     },
   });
 
-  tour.addStep({
+  // STEP 1 — Workers tab
+  dashboardTour.addStep({
     id: "workers-tab",
     text: "This is where you manage all your workers.",
     attachTo: { element: ".tab-workers", on: "bottom" },
@@ -37,23 +23,60 @@ export const createDashboardTour = ({ setActiveTab }) => {
       {
         text: "Next",
         classes: "shepherd-button shepherd-button-primary",
-        action: tour.next,
+        action: () => {
+          setActiveTab("Workers");
+          dashboardTour.next();
+        },
       },
     ],
   });
 
-  tour.addStep({
+  // STEP 2 — Add worker
+  dashboardTour.addStep({
     id: "add-worker",
     text: "Tap here to add your first worker.",
     attachTo: { element: ".add-worker-btn", on: "bottom" },
     buttons: [
       {
-        text: "Got it",
+        text: "Add worker",
         classes: "shepherd-button shepherd-button-primary",
-        action: tour.next,
+        action: () => {
+          const btn = document.querySelector(".add-worker-btn");
+          if (btn) btn.click(); // open modal
+
+          dashboardTour.hide(); // 👈 THIS IS THE KEY
+        },
       },
     ],
   });
 
-  return tour;
+  // STEP 3 — Worker card (appears AFTER creation)
+  dashboardTour.addStep({
+    id: "worker-card",
+    text: "This is your worker. Tap here to view attendance, advances, and settlement details.",
+    attachTo: { element: ".worker-card", on: "top" },
+    buttons: [
+      {
+        text: "Finish",
+        classes: "shepherd-button shepherd-button-primary",
+        action: () => dashboardTour.complete(),
+      },
+    ],
+  });
+
+  dashboardTour.on("complete", () => {
+    localStorage.setItem("tour.dashboard.completed", "true");
+  });
+  dashboardTour.on("cancel", () => {
+    localStorage.setItem("tour.dashboard.completed", "true");
+  });
+
+  return dashboardTour;
+};
+
+// Called manually AFTER worker is created
+export const goToNextTourStep = () => {
+  if (dashboardTour) {
+    dashboardTour.next();
+  }
 };

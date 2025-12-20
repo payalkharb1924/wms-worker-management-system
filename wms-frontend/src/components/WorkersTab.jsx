@@ -3,6 +3,15 @@ import api from "../api/axios.js";
 import { toast } from "react-toastify";
 import { Loader } from "lucide-react";
 import WorkerLedger from "./WorkerLedger.jsx";
+import { goToNextTourStep } from "../tour/useShepherdTour.js";
+import { createAttendanceTour } from "../tour/useAttendanceTour";
+
+const startAttendanceTour = () => {
+  setTimeout(() => {
+    const tour = createAttendanceTour();
+    tour.start();
+  }, 500);
+};
 
 const WorkersTab = () => {
   const [workers, setWorkers] = useState([]);
@@ -85,11 +94,14 @@ const WorkersTab = () => {
     try {
       await api.post("/workers", form);
       toast.success("Worker added!");
-      window.dispatchEvent(new Event("demo:next"));
 
       setShowForm(false);
       setForm({ name: "", remarks: "" });
-      fetchWorkers();
+      await fetchWorkers();
+
+      setTimeout(() => {
+        goToNextTourStep(); // will go to worker-card step
+      }, 300);
     } catch (error) {
       console.log(error);
       toast.error(error.response?.data?.msg || "Add worker failed");
@@ -190,10 +202,6 @@ const WorkersTab = () => {
         <button
           onClick={() => {
             setShowForm(true);
-
-            setTimeout(() => {
-              window.dispatchEvent(new Event("demo:next"));
-            }, 50); // 👈 wait for DOM mount
           }}
           className="add-worker-btn primary-bg text-white px-4 py-2.5 rounded-xl text-sm font-semibold shadow-sm active:scale-95 transition"
         >
@@ -363,7 +371,10 @@ focus:border-[var(--primary)] transition
                 </div>
 
                 <button
-                  onClick={() => setShowDetails(false)}
+                  onClick={() => {
+                    setShowDetails(false);
+                    startAttendanceTour();
+                  }}
                   className="w-full mt-3 py-2 bg-gray-200 rounded-md text-sm font-medium"
                 >
                   Close

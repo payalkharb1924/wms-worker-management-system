@@ -9,6 +9,7 @@ import AdvancesTab from "../components/AdvancesTab.jsx";
 import ExtrasTab from "../components/ExtrasTab.jsx";
 import SummaryTab from "../components/SummaryTab.jsx";
 import { createDashboardTour } from "../tour/useShepherdTour";
+import { createAttendanceTour } from "../tour/useAttendanceTour.js";
 
 const Dashboard = () => {
   const { user, token } = useSelector((state) => state.auth);
@@ -27,23 +28,39 @@ const Dashboard = () => {
     }
   }, [user, token, dispatch]);
 
+  useEffect(() => {
+    if (token && !localStorage.getItem("tour.dashboard.completed")) {
+      const tour = createDashboardTour({ setActiveTab });
+      setTimeout(() => tour.start(), 300);
+    }
+  }, [token]);
+
   const handleLogout = () => {
+    // TODO
+    window.__attendanceTourStarted = false;
     dispatch(logout());
     navigate("/login");
   };
 
-  useEffect(() => {
-    const seen = localStorage.getItem("hasSeenDemo");
+  const handleTabChange = (tab) => {
+    setActiveTab(tab);
 
-    if (!seen) {
-      const tour = createDashboardTour({ setActiveTab });
+    if (
+      tab === "Attendance" &&
+      localStorage.getItem("tour.dashboard.completed") === "true" &&
+      !localStorage.getItem("tour.attendance.completed") &&
+      !window.__attendanceTourStarted
+    ) {
+      window.__attendanceTourStarted = true;
+
+      const tour = createAttendanceTour();
 
       setTimeout(() => {
         tour.start();
-        localStorage.setItem("hasSeenDemo", "true");
-      }, 800);
+        window.dispatchEvent(new Event("demo:attendance-opened"));
+      }, 400);
     }
-  }, []);
+  };
 
   return (
     <div className="min-h-screen primary-bg p-5 flex flex-col">
@@ -82,7 +99,9 @@ const Dashboard = () => {
         {tabs.map((tab) => (
           <button
             key={tab}
-            onClick={() => setActiveTab(tab)}
+            onClick={() => {
+              handleTabChange(tab);
+            }}
             className={`px-4 py-2 rounded-lg text-sm font-semibold whitespace-nowrap
       ${tab === "Workers" ? "tab-workers" : ""}
       ${tab === "Attendance" ? "tab-attendance" : ""}

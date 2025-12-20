@@ -412,7 +412,13 @@ const AttendanceTab = () => {
 
     // 🔥 DEMO EVENT: user successfully swiped
     if (finalOffset === -80) {
-      window.dispatchEvent(new Event("demo:attendance-swiped"));
+      window.addEventListener(
+        "demo:attendance-swiped",
+        () => {
+          attendanceTour.next();
+        },
+        { once: true }
+      );
     }
 
     delete touchDataRef.current[id];
@@ -513,9 +519,9 @@ const AttendanceTab = () => {
   );
 
   return (
-    <div className="pb-0">
+    <div className="pb-0 attendance-root">
       {/* Toggle Tabs */}
-      <div className="flex gap-2 mb-5 bg-gray-100 p-1 rounded-xl">
+      <div className="attendance-toggle flex gap-2 mb-5 bg-gray-100 p-1 rounded-xl">
         <button
           className={`flex-1 py-2.5 rounded-lg text-sm font-semibold transition-all duration-200 ${
             viewMode === "daily"
@@ -544,7 +550,7 @@ const AttendanceTab = () => {
           {/* Apply to All & Date */}
           <div className="grid grid-cols-2 gap-4 items-center mb-4">
             {/* Apply to all */}
-            <div className="flex pt-3 items-center gap-2">
+            <div className="attendance-apply-all flex pt-3 items-center gap-2">
               <label className="text-sm font-medium whitespace-nowrap">
                 Apply to all
               </label>
@@ -552,7 +558,12 @@ const AttendanceTab = () => {
                 <input
                   type="checkbox"
                   checked={applyToAll}
-                  onChange={(e) => setApplyToAll(e.target.checked)}
+                  onChange={(e) => {
+                    setApplyToAll(e.target.checked);
+                    window.dispatchEvent(
+                      new Event("demo:attendance-apply-all")
+                    );
+                  }}
                 />
                 <span className="toggle-slider"></span>
               </label>
@@ -565,7 +576,7 @@ const AttendanceTab = () => {
                 type="date"
                 value={selectedDate}
                 onChange={(e) => setSelectedDate(e.target.value)}
-                className="border border-gray-200 rounded-xl px-3 py-2 text-sm 
+                className="attendance-date border border-gray-200 rounded-xl px-3 py-2 text-sm 
            max-w-[180px]
            bg-white/80 backdrop-blur-sm
            focus:outline-none 
@@ -634,11 +645,11 @@ const AttendanceTab = () => {
                   <div
                     id={`worker-${w._id}`}
                     key={w._id}
-                    className={`bg-white/80 backdrop-blur-md rounded-2xl p-4 space-y-4 cursor-pointer
+                    className={`attendance-card bg-white/80 backdrop-blur-md rounded-2xl p-4 space-y-4 cursor-pointer
            transition-all duration-200
            border border-gray-200/60
            hover:shadow-md active:scale-[0.99] ${
-             index === 0 ? "attendance-card" : ""
+             index === 0 ? "attendance-card-first" : ""
            }`}
                     onClick={() => {
                       setWorkers((prev) =>
@@ -658,13 +669,16 @@ const AttendanceTab = () => {
                             block: "nearest",
                           });
                       }, 150);
+                      window.dispatchEvent(
+                        new Event("demo:attendance-expanded")
+                      );
                     }}
                   >
                     {/* Header */}
                     <div className="flex justify-between items-center">
                       <p className="font-semibold text-gray-800">{w.name}</p>
 
-                      <label className="text-xs flex items-center gap-1">
+                      <label className="attendance-present-toggle text-xs flex items-center gap-1">
                         Present
                         <label
                           className="toggle-switch"
@@ -673,9 +687,12 @@ const AttendanceTab = () => {
                           <input
                             type="checkbox"
                             checked={w.present || false}
-                            onChange={(e) =>
-                              updateWorker(w._id, "present", e.target.checked)
-                            }
+                            onChange={(e) => {
+                              updateWorker(w._id, "present", e.target.checked);
+                              window.dispatchEvent(
+                                new Event("demo:attendance-present")
+                              );
+                            }}
                           />
                           <span className="toggle-slider"></span>
                         </label>
@@ -888,7 +905,7 @@ const AttendanceTab = () => {
           >
             <div className="shrink-0 bg-white  px-4 py-4">
               <button
-                className={`w-full py-3.5 rounded-2xl text-white text-base font-semibold 
+                className={`attendance-save-btn w-full py-3.5 rounded-2xl text-white text-base font-semibold 
       shadow-lg shadow-orange-200/40
       active:scale-[0.97] transition-all
       ${saving ? "bg-orange-300" : "primary-bg"}`}

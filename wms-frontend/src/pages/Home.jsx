@@ -76,14 +76,14 @@ const Home = () => {
           <button
             onClick={() => alert("Hindi support coming soon 🇮🇳")}
             className="flex items-center gap-2
-               bg-white/60 px-3 py-2 rounded-full
+               bg-white/60 px-2 py-2 rounded-full
                text-xs font-semibold shadow-md
                backdrop-blur
                hover:shadow-lg hover:scale-105
                active:scale-95 transition"
           >
             🌐 EN
-            <span className="text-[10px] opacity-60">HI</span>
+            {/* <span className="text-[10px] opacity-60">HI</span> */}
           </button>
         </motion.div>
       </div>

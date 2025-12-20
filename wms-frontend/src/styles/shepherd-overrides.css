@@ -31,9 +31,9 @@
 
 /* KILL default button styles */
 .shepherd-button {
-  background: none !important;
-  border: none !important;
-  box-shadow: none !important;
+  padding: 6px 14px !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
 }
 
 /* Primary button */
@@ -52,13 +52,38 @@
 
 /* Cancel button */
 .shepherd-button-secondary {
-  color: #6b7280 !important;
-  font-size: 12px !important;
+  background: transparent;
+  color: #6b7280;
+  font-size: 13px;
 }
 
 /* Highlight ring */
+/* Make highlighted elements pop */
 .shepherd-highlight {
-  outline: 3px solid rgba(249, 115, 22, 0.65) !important;
-  outline-offset: 10px !important;
-  border-radius: 16px !important;
+  outline: 3px solid rgba(249, 115, 22, 0.75);
+  outline-offset: 10px;
+  border-radius: 18px;
+  /* background: rgba(255, 255, 255, 0.6); */
+}
+
+/* Force toggles above overlay */
+.toggle-switch,
+.attendance-present-toggle {
+  position: relative;
+  z-index: 9999;
+}
+
+/* Improve Apply to All visibility */
+.attendance-apply-all {
+  padding: 6px 10px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.85);
+}
+
+.shepherd-modal-overlay-container {
+  pointer-events: none;
+}
+
+.shepherd-element {
+  pointer-events: auto;
 }
