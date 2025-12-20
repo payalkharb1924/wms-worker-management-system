@@ -10,6 +10,8 @@ import ExtrasTab from "../components/ExtrasTab.jsx";
 import SummaryTab from "../components/SummaryTab.jsx";
 import { createDashboardTour } from "../tour/useShepherdTour";
 import { createAttendanceTour } from "../tour/useAttendanceTour.js";
+import { createAdvanceTabIntroTour } from "../tour/advanceTabIntroTour";
+import { createAdvanceTour } from "../tour/advancesTour";
 
 const Dashboard = () => {
   const { user, token } = useSelector((state) => state.auth);
@@ -34,6 +36,35 @@ const Dashboard = () => {
       setTimeout(() => tour.start(), 300);
     }
   }, [token]);
+
+  useEffect(() => {
+    const handler = () => {
+      if (localStorage.getItem("tour.advance.intro.completed")) return;
+
+      const tour = createAdvanceTabIntroTour({ setActiveTab });
+      setTimeout(() => tour.start(), 300);
+    };
+
+    window.addEventListener("demo:start-advance-intro", handler);
+    return () =>
+      window.removeEventListener("demo:start-advance-intro", handler);
+  }, []);
+
+  useEffect(() => {
+    const handler = () => {
+      if (localStorage.getItem("tour.extra.completed")) return;
+
+      setActiveTab("Extras");
+
+      setTimeout(() => {
+        window.dispatchEvent(new Event("demo:start-extra-tour"));
+      }, 400);
+    };
+
+    window.addEventListener("demo:advance-tour-finished", handler);
+    return () =>
+      window.removeEventListener("demo:advance-tour-finished", handler);
+  }, []);
 
   const handleLogout = () => {
     // TODO

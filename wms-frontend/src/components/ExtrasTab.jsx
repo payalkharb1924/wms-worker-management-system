@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef } from "react";
 import api from "../api/axios";
 import { Loader, X, Calendar, ChevronDown, ChevronUp } from "lucide-react";
 import { toast } from "react-toastify";
+import { createExtraTour } from "../tour/extraTour";
 
 const ExtrasTab = () => {
   const [workers, setWorkers] = useState([]);
@@ -80,6 +81,26 @@ const ExtrasTab = () => {
 
   useEffect(() => {
     fetchWorkers();
+  }, []);
+
+  useEffect(() => {
+    const handler = () => {
+      if (localStorage.getItem("tour.extra.completed")) return;
+
+      // Force daily view so STEP 1 element exists
+      setViewMode("daily");
+
+      const wait = setInterval(() => {
+        const el = document.querySelector(".extra-daily-card");
+        if (el) {
+          clearInterval(wait);
+          createExtraTour().start();
+        }
+      }, 100);
+    };
+
+    window.addEventListener("demo:start-extra-tour", handler);
+    return () => window.removeEventListener("demo:start-extra-tour", handler);
   }, []);
 
   const getWorkerName = (workerId) => {
@@ -446,7 +467,7 @@ const ExtrasTab = () => {
           Add Extra
         </button>
         <button
-          className={`flex-1 py-2 rounded-md font-medium ${
+          className={`extra-history-tab flex-1 py-2 rounded-md font-medium ${
             viewMode === "history"
               ? "primary-bg text-white"
               : "bg-gray-200 text-gray-700"
@@ -459,7 +480,7 @@ const ExtrasTab = () => {
 
       {/* DAILY VIEW */}
       {viewMode === "daily" && (
-        <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-200 space-y-4">
+        <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-200 space-y-4 extra-daily-card">
           {/* Worker + Date */}
           <div className="grid grid-cols-1 gap-4 mb-4">
             <div className="flex flex-col gap-1">
@@ -572,7 +593,7 @@ focus:border-[var(--primary)] transition
       {viewMode === "history" && (
         <div className="space-y-4">
           {/* Filters Card */}
-          <div className="bg-white rounded-xl p-4 shadow-md border border-gray-100">
+          <div className="bg-white rounded-xl p-4 shadow-md border border-gray-100 extra-history-filters">
             <p className="text-sm font-semibold text-gray-800">View Extras</p>
 
             {/* Segmented control */}

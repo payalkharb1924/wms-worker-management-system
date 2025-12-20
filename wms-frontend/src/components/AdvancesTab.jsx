@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef } from "react";
 import api from "../api/axios";
 import { Loader, X, Calendar, ChevronDown, ChevronUp } from "lucide-react";
 import { toast } from "react-toastify";
+import { createAdvanceTour } from "../tour/advancesTour";
 
 const AdvancesTab = () => {
   const [workers, setWorkers] = useState([]);
@@ -78,6 +79,25 @@ const AdvancesTab = () => {
 
   useEffect(() => {
     fetchWorkers();
+  }, []);
+
+  useEffect(() => {
+    const handler = () => {
+      if (localStorage.getItem("tour.advance.completed")) return;
+
+      setViewMode("daily");
+
+      const wait = setInterval(() => {
+        const el = document.querySelector(".advance-daily-card");
+        if (el) {
+          clearInterval(wait);
+          createAdvanceTour().start();
+        }
+      }, 100);
+    };
+
+    window.addEventListener("demo:start-advance-tour", handler);
+    return () => window.removeEventListener("demo:start-advance-tour", handler);
   }, []);
 
   const getWorkerName = (workerId) => {
@@ -438,12 +458,15 @@ const AdvancesTab = () => {
           Add Advance
         </button>
         <button
-          className={`flex-1 py-2 rounded-md font-medium ${
+          className={`advance-history-tab flex-1 py-2 rounded-md font-medium ${
             viewMode === "history"
               ? "primary-bg text-white"
               : "bg-gray-200 text-gray-700"
           }`}
-          onClick={() => setViewMode("history")}
+          onClick={() => {
+            setViewMode("history");
+            window.dispatchEvent(new Event("demo:advance-history-clicked"));
+          }}
         >
           History
         </button>
@@ -451,7 +474,7 @@ const AdvancesTab = () => {
 
       {/* DAILY VIEW */}
       {viewMode === "daily" && (
-        <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-200 space-y-4">
+        <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-200 space-y-4 advance-daily-card">
           {/* Worker + Date */}
           <div className="grid grid-cols-1 gap-4 mb-4">
             <div className="flex flex-col gap-1">
@@ -546,7 +569,7 @@ focus:border-[var(--primary)] transition"
       {viewMode === "history" && (
         <div className="space-y-4">
           {/* Filters Card */}
-          <div className="bg-white rounded-xl p-4 shadow-md border border-gray-100">
+          <div className="bg-white rounded-xl p-4 shadow-md border border-gray-100 advance-history-filters">
             <p className="text-sm font-semibold text-gray-800">View Advances</p>
 
             {/* Segmented control */}

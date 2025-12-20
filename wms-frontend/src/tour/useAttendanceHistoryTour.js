@@ -68,10 +68,11 @@ You can filter attendance in multiple ways:
         classes: "shepherd-button shepherd-button-primary",
         action: () => {
           historyTour.complete();
-          localStorage.setItem(
-            "tour.attendance.history.basic.completed",
-            "true"
-          );
+          localStorage.setItem("tour.attendance.completed", "true");
+
+          setTimeout(() => {
+            window.dispatchEvent(new Event("demo:start-advance-intro"));
+          }, 300);
         },
       },
     ],
