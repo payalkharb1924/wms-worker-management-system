@@ -1,8 +1,8 @@
 importScripts(
-  "https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"
+  "https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"
 );
 importScripts(
-  "https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging-compat.js"
+  "https://www.gstatic.com/firebasejs/9.22.0/firebase-messaging-compat.js"
 );
 
 firebase.initializeApp({
@@ -17,12 +17,9 @@ firebase.initializeApp({
 const messaging = firebase.messaging();
 
 messaging.onBackgroundMessage((payload) => {
-  console.log("📩 Background Msg:", payload);
+  if (payload.data?.appControlled !== "true") return;
 
-  const { title, body } = payload.notification;
-
-  self.registration.showNotification(title, {
-    body,
-    icon: "/icons/icon-192.png",
+  self.registration.showNotification(payload.notification.title, {
+    body: payload.notification.body,
   });
 });
