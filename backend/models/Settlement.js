@@ -50,7 +50,7 @@ const SettlementSchema = new mongoose.Schema(
     // Optional: store farmer for faster Summary tab queries
     farmerId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
+      ref: "Farmer",
       required: true,
     },
   },

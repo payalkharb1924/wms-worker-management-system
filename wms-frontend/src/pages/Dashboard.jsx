@@ -12,6 +12,7 @@ import { createDashboardTour } from "../tour/useShepherdTour";
 import { createAttendanceTour } from "../tour/useAttendanceTour.js";
 import { createAdvanceTabIntroTour } from "../tour/advanceTabIntroTour";
 import { createAdvanceTour } from "../tour/advancesTour";
+import BotFab from "../components/BotFab";
 
 const Dashboard = () => {
   const { user, token } = useSelector((state) => state.auth);
@@ -96,33 +97,41 @@ const Dashboard = () => {
   return (
     <div className="min-h-screen primary-bg p-5 flex flex-col">
       {/* Header */}
-      <div className="flex justify-between items-center text-white mb-6">
-        <div>
-          <h2 className="text-2xl font-bold">
-            Hi! {user?.name || "Farmer"} 👋
-          </h2>
-          <p className="opacity-70">Welcome to Dashboard</p>
+      <div className="flex items-center justify-between text-white mb-6">
+        {/* LEFT SIDE: Hamburger + Greeting */}
+        <div className="flex items-center gap-3">
+          {/* HAMBURGER MENU */}
+          <div className="relative">
+            <button
+              onClick={() => setMenuOpen(!menuOpen)}
+              className="w-10 h-10 flex items-center justify-center bg-black/10 rounded-lg"
+            >
+              <span className="text-2xl">☰</span>
+            </button>
+
+            {menuOpen && (
+              <div className="absolute left-0 top-12 w-32 bg-white text-black shadow-lg rounded-lg p-2 z-50">
+                <button
+                  onClick={handleLogout}
+                  className="w-full text-left px-2 py-2 rounded hover:bg-gray-200"
+                >
+                  Logout
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* GREETING */}
+          <div>
+            <h2 className="text-2xl font-bold">
+              Hi! {user?.name || "Farmer"} 👋
+            </h2>
+            <p className="opacity-70 text-sm">Welcome to Dashboard</p>
+          </div>
         </div>
-        {/* Hamburger Menu */}
-        <div className="relative">
-          <button
-            onClick={() => setMenuOpen(!menuOpen)}
-            className="w-10 h-10 flex items-center justify-center bg-black/10 rounded-lg"
-          >
-            <span className="text-2xl">☰</span>
-          </button>
-          {/* Dropdown */}
-          {menuOpen && (
-            <div className="absolute right-0 mt-2 w-32 bg-white text-black shadow-lg rounded-lg p-2">
-              <button
-                onClick={handleLogout}
-                className="w-full text-left px-2 py-2 rounded hover:bg-gray-200"
-              >
-                Logout
-              </button>
-            </div>
-          )}
-        </div>
+
+        {/* RIGHT SIDE: BOT ICON */}
+        <BotFab />
       </div>
 
       {/* Tabs */}

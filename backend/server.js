@@ -8,6 +8,7 @@ import advanceRoutes from "./routes/advance.route.js";
 import extraRoutes from "./routes/extra.route.js";
 import settlementRoutes from "./routes/settlement.route.js";
 import insightsRoutes from "./routes/insights.routes.js";
+import botRoutes from "./routes/bot.route.js";
 import cors from "cors";
 
 env.config();
@@ -35,6 +36,7 @@ app.use("/api/advance", advanceRoutes);
 app.use("/api/extra", extraRoutes);
 app.use("/api/settlement", settlementRoutes);
 app.use("/api/insights", insightsRoutes);
+app.use("/api/bot", botRoutes);
 
 app.listen(PORT, () => {
   console.log(`✅ Server running on port ` + PORT);
