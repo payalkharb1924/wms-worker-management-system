@@ -29,6 +29,8 @@ app.use(
   })
 );
 
+app.use(morgan("tiny"));
+
 app.use(express.json());
 
 app.get("/", (req, res) => {
@@ -44,8 +46,6 @@ app.use("/api/settlement", settlementRoutes);
 app.use("/api/insights", insightsRoutes);
 app.use("/api/notifications", notificationsRoutes);
 app.use("/health", healthRoutes);
-
-app.use(morgan("tiny"));
 
 app.listen(PORT, () => {
   console.log(`✅ Server running on port ` + PORT);
