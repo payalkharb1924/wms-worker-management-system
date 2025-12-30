@@ -10,7 +10,9 @@ import extraRoutes from "./routes/extra.route.js";
 import settlementRoutes from "./routes/settlement.route.js";
 import insightsRoutes from "./routes/insights.routes.js";
 import notificationsRoutes from "./routes/notifications.route.js";
+import healthRoutes from "./routes/health.route.js";
 import cors from "cors";
+import morgan from "morgan";
 
 connectDB();
 
@@ -41,6 +43,9 @@ app.use("/api/extra", extraRoutes);
 app.use("/api/settlement", settlementRoutes);
 app.use("/api/insights", insightsRoutes);
 app.use("/api/notifications", notificationsRoutes);
+app.use("/health", healthRoutes);
+
+app.use(morgan("tiny"));
 
 app.listen(PORT, () => {
   console.log(`✅ Server running on port ` + PORT);
