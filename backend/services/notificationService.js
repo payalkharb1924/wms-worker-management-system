@@ -288,7 +288,7 @@ export const generateAISuggestions = async () => {
     const randomMessage =
       aiMessages[Math.floor(Math.random() * aiMessages.length)];
     const body = randomMessage.replace("{workers}", workerNames.join(", "));
-    const title = `🤖 AI Insight`;
+    const title = `🤖 AI Suggestion`;
     console.log(`Sending AI suggestion to ${userId}: ${title} - ${body}`);
     await sendNotificationToUser(userId, title, body, "ai", {
       workers: workerNames,
