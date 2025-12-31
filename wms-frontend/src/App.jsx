@@ -8,8 +8,27 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import Home from "./pages/Home";
 import Signup from "./pages/Signup";
 import PublicRoute from "./components/PublicRoute";
+import { messaging } from "./firebase";
+import { onMessage } from "firebase/messaging";
+import { useEffect } from "react";
 
 export default function App() {
+  useEffect(() => {
+    onMessage(messaging, (payload) => {
+      console.log("Foreground message:", payload);
+      // FCM handles notification automatically, so don't show again
+      // const { title, body, icon, image } = payload.data || {};
+      // const finalTitle = title || "Notification";
+      // const finalBody = body || "You have a new message";
+      // new Notification(finalTitle, {
+      //   body: finalBody,
+      //   icon: icon || "/logo-192.png",
+      //   image: image || "/logo-512.png",
+      //   badge: "/badge.png",
+      // });
+    });
+  }, []);
+
   return (
     <Provider store={store}>
       <Router>

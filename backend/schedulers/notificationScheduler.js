@@ -58,7 +58,7 @@ cron.schedule("0 8 * * *", async () => {
 });
 
 // Daily at 7 AM: Farming hack
-cron.schedule("0 7 * * *", async () => {
+cron.schedule("30 15 * * *", async () => {
   console.log("🌾 Running daily farming hack...");
   try {
     await sendDailyFarmingHack();

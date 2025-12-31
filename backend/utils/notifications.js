@@ -20,11 +20,12 @@ export const sendPushNotification = async ({
       notification: {
         title,
         body,
-        icon: "https://mywms.pages.dev/logo-192.png",
-        image: "https://mywms.pages.dev/logo-512.png",
-        color: "#fe8216",
       },
       data: {
+        title,
+        body,
+        icon: "https://mywms.pages.dev/logo-192.png",
+        image: "https://mywms.pages.dev/logo-512.png",
         click_action: "https://mywms.pages.dev/dashboard",
       },
     };

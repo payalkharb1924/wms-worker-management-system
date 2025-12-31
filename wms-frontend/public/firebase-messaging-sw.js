@@ -18,20 +18,22 @@ const messaging = firebase.messaging();
 messaging.onBackgroundMessage((payload) => {
   console.log("[SW] Background message:", payload);
 
-  const { title, body } = payload.notification || {};
-
-  const options = {
-    body,
-    icon: "/logo-192.png", // app logo
-    badge: "/badge.png", // small monochrome icon
-    image: "/logo-512.png", // large image (optional)
-    vibrate: [100, 50, 100],
-    data: {
-      click_action: payload.data?.click_action || "https://mywms.pages.dev",
-    },
-  };
-
-  self.registration.showNotification(title, options);
+  // FCM handles the notification automatically, so don't show again to avoid duplicate
+  // const { title, body, icon, image } = payload.data || {};
+  // const finalTitle = title || "Notification";
+  // const finalBody = body || "You have a new message";
+  // const options = {
+  //   body: finalBody,
+  //   icon: icon || "/logo-192.png", // app logo
+  //   badge: "/badge.png", // small monochrome icon
+  //   image: image || "/logo-512.png", // large image (optional)
+  //   color: "#fe8126", // custom color
+  //   vibrate: [100, 50, 100],
+  //   data: {
+  //     click_action: payload.data?.click_action || "https://mywms.pages.dev",
+  //   },
+  // };
+  // self.registration.showNotification(finalTitle, options);
 });
 
 self.addEventListener("notificationclick", (event) => {
