@@ -1,10 +1,18 @@
 import React, { useEffect, useState } from "react";
 import api from "../api/axios.js";
 import { toast } from "react-toastify";
-import { Loader } from "lucide-react";
+import { Loader, X } from "lucide-react";
 import WorkerLedger from "./WorkerLedger.jsx";
+import MonthWiseSettleModal from "./MonthWiseSettleModal.jsx";
 import { goToNextTourStep } from "../tour/useShepherdTour.js";
 import { createAttendanceTour } from "../tour/useAttendanceTour";
+
+const formatDate = (d) =>
+  new Date(d).toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
 
 const WorkersTab = () => {
   const [workers, setWorkers] = useState([]);
@@ -25,6 +33,8 @@ const WorkersTab = () => {
   const [pendingSummary, setPendingSummary] = useState(null);
   const [showSettlePopup, setShowSettlePopup] = useState(false);
   const [settleLoading, setSettleLoading] = useState(false);
+  const [showMonthWiseSettlePopup, setShowMonthWiseSettlePopup] =
+    useState(false);
 
   const [settleForm, setSettleForm] = useState({
     startDate: "",
@@ -33,6 +43,7 @@ const WorkersTab = () => {
   });
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deletePassword, setDeletePassword] = useState("");
+  const [showFinalSettleConfirm, setShowFinalSettleConfirm] = useState(false);
 
   const handleUpdateWorker = async (id) => {
     try {
@@ -138,10 +149,14 @@ const WorkersTab = () => {
       });
 
       toast.success("Settlement saved!");
-      setShowSettlePopup(false);
 
-      // refresh pending summary
+      // CLOSE ALL RELATED POPUPS
+      setShowSettlePopup(false);
+      setShowFinalSettleConfirm(false);
+
+      // Refresh data
       fetchWorkerSummary(selectedWorker._id);
+      fetchWorkers();
     } catch (err) {
       toast.error(err.response?.data?.msg || "Settlement failed");
     } finally {
@@ -324,9 +339,9 @@ focus:border-[var(--primary)] transition
                     {selectedWorker.status}
                   </span>
                 </div>
-                <div className="flex gap-2 mt-4">
+                <div className="grid grid-cols-2 gap-2 mt-4">
                   <button
-                    className="edit-worker-btn bg-blue-800 text-white flex-1 py-2.5 rounded-xl font-semibold active:scale-95 transition"
+                    className="edit-worker-btn bg-blue-800 text-white py-2.5 rounded-xl font-semibold active:scale-95 transition text-sm"
                     onClick={() => {
                       setEditing(true);
                       setEditForm({
@@ -338,8 +353,9 @@ focus:border-[var(--primary)] transition
                   >
                     Edit
                   </button>
+
                   <button
-                    className="delete-worker-btn bg-red-500 text-white flex-1 py-2.5 rounded-xl font-semibold active:scale-95 transition"
+                    className="delete-worker-btn bg-red-500 text-white py-2.5 rounded-xl font-semibold active:scale-95 transition text-sm"
                     onClick={() => setShowDeleteConfirm(true)}
                     disabled={deleteLoading}
                   >
@@ -433,13 +449,78 @@ focus:border-[var(--primary)] transition
       {/* SETTLE PAYMENT POPUP */}
       {showSettlePopup && pendingSummary && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-white w-[90%] max-w-sm p-6 rounded-2xl shadow-xl space-y-4 relative">
+            <button
+              onClick={() => setShowSettlePopup(false)}
+              className="
+    absolute top-4 right-4
+    text-gray-400 hover:text-gray-600
+    transition
+  "
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <h3 className="text-lg font-bold">Settle payments</h3>
+
+            <p className="text-sm text-gray-600">
+              How would you like to settle the pending amount?
+            </p>
+
+            {/* DETAILS BOX (restored ✅) */}
+            <div className="bg-gray-50 rounded-xl p-4 space-y-2 text-sm">
+              <div className="flex justify-between">
+                <span className="text-gray-500">Period</span>
+                <span className="font-medium">
+                  {formatDate(settleForm.startDate)} →{" "}
+                  {formatDate(settleForm.endDate)}
+                </span>
+              </div>
+
+              <div className="flex justify-between">
+                <span className="text-gray-500">Net amount</span>
+                <span className="font-bold text-[var(--primary)]">
+                  ₹{pendingSummary.amounts.netPending}
+                </span>
+              </div>
+            </div>
+
+            {/* ACTIONS */}
+            <div className="space-y-3 pt-2">
+              {/* Month-wise */}
+              <button
+                className="w-full primary-bg hover:bg-gray-200 py-2.5 text-white rounded-xl font-semibold transition"
+                onClick={() => {
+                  setShowSettlePopup(false);
+                  setShowMonthWiseSettlePopup(true);
+                }}
+              >
+                Month-wise settlement
+              </button>
+              {/* Settle all */}
+              <button
+                className="w-full bg-gray-200 hover:bg-gray-300  text-gray-400 py-2.5 rounded-xl font-medium transition"
+                onClick={() => {
+                  setShowSettlePopup(false);
+                  setShowFinalSettleConfirm(true); // 👈 NEW
+                }}
+              >
+                Settle all at once
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {showFinalSettleConfirm && pendingSummary && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[60]">
           <div className="bg-white w-[90%] max-w-md p-6 rounded-2xl shadow-xl space-y-4">
             <h3 className="text-lg font-bold">Settle Payment</h3>
-            <p className="text-xs text-gray-500">
+
+            <p className="text-sm text-gray-500">
               Settlement period is auto-calculated and cannot be changed.
             </p>
 
-            {/* Date range */}
+            {/* DATE RANGE */}
             <div className="grid grid-cols-2 gap-3 text-sm">
               <div>
                 <label className="text-xs text-gray-500">Start Date</label>
@@ -447,59 +528,67 @@ focus:border-[var(--primary)] transition
                   type="date"
                   value={settleForm.startDate}
                   disabled
-                  className="border rounded-md p-2 w-full bg-gray-100 cursor-not-allowed"
+                  className="border rounded-lg p-2 w-full bg-gray-100 cursor-not-allowed"
                 />
               </div>
+
               <div>
                 <label className="text-xs text-gray-500">End Date</label>
                 <input
                   type="date"
                   value={settleForm.endDate}
                   disabled
-                  className="border rounded-md p-2 w-full bg-gray-100 cursor-not-allowed"
+                  className="border rounded-lg p-2 w-full bg-gray-100 cursor-not-allowed"
                 />
               </div>
             </div>
 
-            {/* Note */}
+            {/* NOTE */}
             <input
               type="text"
               placeholder="Payment note (optional)"
-              className="border rounded-md p-2 text-sm w-full"
+              className="border rounded-lg p-2 text-sm w-full"
               value={settleForm.note}
               onChange={(e) =>
                 setSettleForm({ ...settleForm, note: e.target.value })
               }
             />
 
-            {/* Amount shown clearly */}
+            {/* AMOUNT */}
             <div className="text-right font-bold text-[var(--primary)] text-xl">
               ₹{pendingSummary.amounts.netPending}
             </div>
 
+            {/* CONFIRM */}
             <button
-              className="primary-bg w-full py-2 rounded-lg text-white font-semibold"
+              className="primary-bg w-full py-2.5 rounded-xl text-white font-semibold"
               disabled={settleLoading}
-              onClick={handleSettlementConfirm}
+              onClick={() => {
+                setShowFinalSettleConfirm(false);
+                handleSettlementConfirm(); // OLD LOGIC
+              }}
             >
               {settleLoading ? (
                 <div className="flex justify-center gap-2">
-                  <Loader className="w-4 h-4 animate-spin" /> Settling...
+                  <Loader className="w-4 h-4 animate-spin" />
+                  Settling...
                 </div>
               ) : (
                 "Confirm Settlement"
               )}
             </button>
 
+            {/* CANCEL */}
             <button
-              className="w-full py-2 bg-gray-200 rounded-lg text-sm"
-              onClick={() => setShowSettlePopup(false)}
+              className="w-full py-2 bg-gray-200 rounded-xl text-sm"
+              onClick={() => setShowFinalSettleConfirm(false)}
             >
               Cancel
             </button>
           </div>
         </div>
       )}
+
       {showDeleteConfirm && (
         <div className="fixed inset-0 bg-black/40 flex justify-center items-center z-50">
           <div className="bg-white p-6 w-[90%] max-w-md rounded-2xl shadow-xl space-y-4">
@@ -543,6 +632,17 @@ focus:outline-none focus:ring-2 focus:ring-red-200
           </div>
         </div>
       )}
+
+      {/* Month-wise Settle Modal */}
+      <MonthWiseSettleModal
+        isOpen={showMonthWiseSettlePopup}
+        onClose={() => setShowMonthWiseSettlePopup(false)}
+        worker={selectedWorker}
+        onSettlementComplete={() => {
+          fetchWorkers();
+          fetchWorkerSummary(selectedWorker._id);
+        }}
+      />
     </div>
   );
 };

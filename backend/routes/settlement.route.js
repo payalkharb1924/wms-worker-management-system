@@ -7,6 +7,10 @@ import {
   getWorkerSettlements,
   getFarmerSettlementsHistory,
   getWorkerLedger,
+  getWorkerLastSettlement,
+  getWorkerMonthWiseSummary,
+  createMonthWiseSettlement,
+  generateMonthWisePDF,
 } from "../controller/settlement.controller.js";
 
 const router = express.Router();
@@ -32,5 +36,27 @@ router.get("/worker/:workerId/history", authMiddleware, getWorkerSettlements);
 router.get("/farmer/history", authMiddleware, getFarmerSettlementsHistory);
 
 router.get("/worker/:workerId/ledger", authMiddleware, getWorkerLedger);
+
+// Month-wise settlement routes
+router.get(
+  "/worker/:workerId/last-settlement",
+  authMiddleware,
+  getWorkerLastSettlement
+);
+router.get(
+  "/worker/:workerId/month-wise-summary",
+  authMiddleware,
+  getWorkerMonthWiseSummary
+);
+router.post(
+  "/worker/:workerId/month-wise-settle",
+  authMiddleware,
+  createMonthWiseSettlement
+);
+router.get(
+  "/worker/:workerId/month-wise-pdf",
+  authMiddleware,
+  generateMonthWisePDF
+);
 
 export default router;
