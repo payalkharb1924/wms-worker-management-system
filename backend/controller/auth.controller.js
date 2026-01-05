@@ -1,6 +1,8 @@
 import jwt from "jsonwebtoken";
 import Farmer from "../models/Farmer.js";
 import bcrypt from "bcrypt";
+import { generateOTP } from "../utils/otp.js";
+import { sendEmail } from "../utils/sendEmail.js";
 
 export const signup = async (req, res) => {
   try {
@@ -11,26 +13,76 @@ export const signup = async (req, res) => {
         .status(400)
         .json({ msg: "Password must be atleast 5 digit long" });
     }
-    let existingUser = await Farmer.findOne({ email: email });
+    let existingUser = await Farmer.findOne({ email });
+
     if (existingUser) {
+      // 🔁 If email exists but NOT verified → resend OTP
+      if (!existingUser.isEmailVerified) {
+        const otp = generateOTP();
+
+        existingUser.otp = otp;
+        existingUser.otpExpiry = Date.now() + 10 * 60 * 1000;
+        await existingUser.save();
+
+        await sendEmail({
+          to: email,
+          subject: "Verify your email",
+          html: `<p>Your OTP is <b>${otp}</b>. Valid for 10 minutes.</p>`,
+        });
+
+        return res.status(200).json({
+          msg: "OTP re-sent to your email",
+        });
+      }
+
+      // ❌ If already verified → block signup
       return res
         .status(400)
-        .json({ msg: "Email already exists, Please Login." });
+        .json({ msg: "Email already exists. Please login." });
     }
+
     const hashedPassword = await bcrypt.hash(password, 10);
+    const otp = generateOTP();
+
     const newUser = await Farmer.create({
       name,
       email,
       password: hashedPassword,
+      otp,
+      otpExpiry: Date.now() + 10 * 60 * 1000, // 10 min
     });
+
+    await sendEmail({
+      to: email,
+      subject: "Verify your email",
+      html: `<p>Your OTP is <b>${otp}</b>. Valid for 10 minutes.</p>`,
+    });
+
     return res.status(200).json({
       msg: "Signup successfull",
-      user: { id: newUser._id, name: newUser.name, email: newUser.email },
     });
   } catch (error) {
     console.log(error);
     return res.status(500).json({ msg: "Signup Error" });
   }
+};
+
+export const verifySignupOTP = async (req, res) => {
+  const { email, otp } = req.body;
+
+  const user = await Farmer.findOne({ email });
+  if (!user) return res.status(404).json({ msg: "User not found" });
+
+  if (user.otp !== otp || user.otpExpiry < Date.now()) {
+    return res.status(400).json({ msg: "Invalid or expired OTP" });
+  }
+
+  user.isEmailVerified = true;
+  user.otp = undefined;
+  user.otpExpiry = undefined;
+  await user.save();
+
+  res.json({ msg: "Email verified successfully" });
 };
 
 export const login = async (req, res) => {
@@ -44,6 +96,10 @@ export const login = async (req, res) => {
     }
     const user = await Farmer.findOne({ email });
     if (!user) return res.status(401).json({ msg: "Enter valid email" });
+
+    if (!user.isEmailVerified) {
+      return res.status(403).json({ msg: "Please verify your email first" });
+    }
 
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
@@ -98,4 +154,41 @@ export const verifyPassword = async (req, res) => {
     console.log(error);
     return res.status(500).json({ msg: "Error verifying password" });
   }
+};
+
+export const forgotPassword = async (req, res) => {
+  const { email } = req.body;
+  const user = await Farmer.findOne({ email });
+  if (!user) return res.status(404).json({ msg: "User not found" });
+
+  const otp = generateOTP();
+  user.otp = otp;
+  user.otpExpiry = Date.now() + 10 * 60 * 1000;
+  await user.save();
+
+  await sendEmail({
+    to: email,
+    subject: "Reset Password OTP",
+    html: `<p>Your OTP is <b>${otp}</b></p>`,
+  });
+
+  res.json({ msg: "OTP sent to email" });
+};
+
+export const resetPassword = async (req, res) => {
+  const { email, otp, newPassword } = req.body;
+
+  const user = await Farmer.findOne({ email });
+  if (!user) return res.status(404).json({ msg: "User not found" });
+
+  if (user.otp !== otp || user.otpExpiry < Date.now()) {
+    return res.status(400).json({ msg: "Invalid or expired OTP" });
+  }
+
+  user.password = await bcrypt.hash(newPassword, 10);
+  user.otp = undefined;
+  user.otpExpiry = undefined;
+  await user.save();
+
+  res.json({ msg: "Password reset successful" });
 };

@@ -4,7 +4,7 @@ import { useDispatch } from "react-redux";
 import { useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 import { login } from "../features/auth/authSlice.js";
-import { Loader } from "lucide-react";
+import { Loader, Eye, EyeOff } from "lucide-react";
 
 const Login = () => {
   const navigate = useNavigate();
@@ -13,6 +13,8 @@ const Login = () => {
     email: "",
     password: "",
   });
+  const [showPassword, setShowPassword] = useState(false);
+
   const [loading, setLoading] = useState(false);
   const handleChange = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value });
@@ -61,16 +63,23 @@ const Login = () => {
               onChange={handleChange}
             />
           </div>
-          <div className="flex flex-col space-y-1">
+          <div className="flex flex-col space-y-1 relative">
             <label className="font-medium">Password</label>
             <input
-              className="signup-input border-b rounded-md border-gray-300 focus:outline-none focus:border-[var(--primary)] p-2"
-              type="password"
+              className="signup-input border-b rounded-md border-gray-300 focus:outline-none focus:border-[var(--primary)] p-2 pr-10"
+              type={showPassword ? "text" : "password"}
               name="password"
               value={form.password}
               placeholder="example@123"
               onChange={handleChange}
             />
+            <button
+              type="button"
+              onClick={() => setShowPassword((prev) => !prev)}
+              className="absolute right-2 top-9 text-gray-500 hover:text-gray-700"
+            >
+              {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+            </button>
           </div>
 
           <button
@@ -90,6 +99,15 @@ const Login = () => {
             )}
           </button>
         </form>
+        <p className="text-sm text-center mt-4">
+          <button
+            onClick={() => navigate("/forgot-password")}
+            className="text-[var(--primary)] font-semibold hover:underline"
+          >
+            Forgot Password?
+          </button>
+        </p>
+
         {/* Footer link */}
         <p className="text-sm text-gray-600 text-center mt-6">
           New here?{" "}

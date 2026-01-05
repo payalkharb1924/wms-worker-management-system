@@ -4,6 +4,9 @@ import {
   me,
   signup,
   verifyPassword,
+  verifySignupOTP,
+  forgotPassword,
+  resetPassword,
 } from "../controller/auth.controller.js";
 import { authMiddleware } from "../middlewares/auth.middleware.js";
 
@@ -13,5 +16,8 @@ router.post("/signup", signup);
 router.post("/login", login);
 router.get("/me", authMiddleware, me);
 router.post("/verify-password", authMiddleware, verifyPassword);
+router.post("/verify-signup-otp", verifySignupOTP);
+router.post("/forgot-password", forgotPassword);
+router.post("/reset-password", resetPassword);
 
 export default router;

@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 import api from "../api/axios.js";
-import { Loader } from "lucide-react";
+import { Loader, Eye, EyeOff } from "lucide-react";
 
 const Signup = () => {
   const navigate = useNavigate();
@@ -13,6 +13,9 @@ const Signup = () => {
     password: "",
     confirmPassword: "",
   });
+  const [showPassword, setShowPassword] = useState(false);
+const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
   const [loading, setLoading] = useState(false);
 
   const handleChange = (e) => {
@@ -25,25 +28,29 @@ const Signup = () => {
 
     if (form.password !== form.confirmPassword) {
       toast.error("Passwords do not match");
+      setLoading(false);
+      return;
     }
 
     try {
-      const res = await api.post("/auth/signup", {
+      await api.post("/auth/signup", {
         name: form.name,
         email: form.email,
         password: form.password,
       });
 
-      toast.success("Signup successfull! Please Login.");
+      toast.success("OTP sent to your email");
 
-      setTimeout(() => navigate("/login"), 800);
+      navigate("/verify-email", {
+        state: { email: form.email },
+      });
     } catch (error) {
-      console.log(error);
-      toast.error(error.response?.data?.msg || "Signup failed. Try again");
+      toast.error(error.response?.data?.msg || "Signup failed");
     } finally {
       setLoading(false);
     }
   };
+
   return (
     <div className="flex min-h-screen justify-center items-center px-4 primary-bg">
       <div className="flex flex-col w-full max-w-sm bg-white shadow-lg rounded-xl p-8">
@@ -73,28 +80,44 @@ const Signup = () => {
               onChange={handleChange}
             />
           </div>
-          <div className="flex flex-col space-y-1">
-            <label className="font-medium">Password</label>
-            <input
-              className="signup-input border-b rounded-md border-gray-300 focus:outline-none focus:border-[var(--primary)] p-2"
-              type="password"
-              name="password"
-              value={form.password}
-              placeholder="example@123"
-              onChange={handleChange}
-            />
-          </div>
-          <div className="flex flex-col space-y-1">
-            <label className="font-medium">Confirm Password</label>
-            <input
-              className="signup-input border-b rounded-md border-gray-300 focus:outline-none focus:border-[var(--primary)] p-2"
-              type="password"
-              name="confirmPassword"
-              value={form.confirmPassword}
-              placeholder="example@123"
-              onChange={handleChange}
-            />
-          </div>
+          <div className="flex flex-col space-y-1 relative">
+  <label className="font-medium">Password</label>
+  <input
+    className="signup-input border-b rounded-md border-gray-300 focus:outline-none focus:border-[var(--primary)] p-2 pr-10"
+    type={showPassword ? "text" : "password"}
+    name="password"
+    value={form.password}
+    placeholder="example@123"
+    onChange={handleChange}
+  />
+  <button
+    type="button"
+    onClick={() => setShowPassword((p) => !p)}
+    className="absolute right-2 top-9 text-gray-500"
+  >
+    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+  </button>
+</div>
+
+          <div className="flex flex-col space-y-1 relative">
+  <label className="font-medium">Confirm Password</label>
+  <input
+    className="signup-input border-b rounded-md border-gray-300 focus:outline-none focus:border-[var(--primary)] p-2 pr-10"
+    type={showConfirmPassword ? "text" : "password"}
+    name="confirmPassword"
+    value={form.confirmPassword}
+    placeholder="example@123"
+    onChange={handleChange}
+  />
+  <button
+    type="button"
+    onClick={() => setShowConfirmPassword((p) => !p)}
+    className="absolute right-2 top-9 text-gray-500"
+  >
+    {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+  </button>
+</div>
+
           <button
             disabled={loading}
             className={`w-full cursor-pointer primary-bg text-white py-3 mt-4 rounded-lg text-lg font-semibold hover:bg-orange-400 transition ${

@@ -16,6 +16,13 @@ const FarmerSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
+    isEmailVerified: {
+      type: Boolean,
+      default: false,
+    },
+
+    otp: String,
+    otpExpiry: Date,
     resetToken: {
       type: String,
     },
