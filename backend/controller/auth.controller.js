@@ -3,6 +3,7 @@ import Farmer from "../models/Farmer.js";
 import bcrypt from "bcrypt";
 import { generateOTP } from "../utils/otp.js";
 import { sendEmail } from "../utils/sendEmail.js";
+import { otpEmailTemplate } from "../utils/otpTemplate.js";
 
 export const signup = async (req, res) => {
   try {
@@ -25,9 +26,12 @@ export const signup = async (req, res) => {
         await existingUser.save();
 
         await sendEmail({
-          to: email,
-          subject: "Verify your email",
-          html: `<p>Your OTP is <b>${otp}</b>. Valid for 10 minutes.</p>`,
+          to: existingUser.email,
+          subject: "Your OTP to verify email",
+          html: otpEmailTemplate({
+            name: existingUser.name || "User",
+            otp,
+          }),
         });
 
         return res.status(200).json({
@@ -53,9 +57,12 @@ export const signup = async (req, res) => {
     });
 
     await sendEmail({
-      to: email,
-      subject: "Verify your email",
-      html: `<p>Your OTP is <b>${otp}</b>. Valid for 10 minutes.</p>`,
+      to: user.email,
+      subject: "Your OTP to verify email",
+      html: otpEmailTemplate({
+        name: newUser.name || "User",
+        otp,
+      }),
     });
 
     return res.status(200).json({
@@ -167,9 +174,12 @@ export const forgotPassword = async (req, res) => {
   await user.save();
 
   await sendEmail({
-    to: email,
-    subject: "Reset Password OTP",
-    html: `<p>Your OTP is <b>${otp}</b></p>`,
+    to: user.email,
+    subject: "Your OTP to reset password",
+    html: otpEmailTemplate({
+      name: user.name || "User",
+      otp,
+    }),
   });
 
   res.json({ msg: "OTP sent to email" });
