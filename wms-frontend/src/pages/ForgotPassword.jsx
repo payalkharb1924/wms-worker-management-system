@@ -160,7 +160,7 @@ const ForgotPassword = () => {
                   onChange={(e) => handleOtpChange(e.target.value, index)}
                   onKeyDown={(e) => handleKeyDown(e, index)}
                   className="w-8 h-10 text-center text-xl font-bold
-                             border rounded-xl
+                            border-2 border-gray-400 rounded-xl
                              focus:outline-none focus:border-[var(--primary)]
                              focus:ring-2 focus:ring-orange-200
                              transition"
