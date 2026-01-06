@@ -1,29 +1,19 @@
 // utils/sendEmail.js
-import nodemailer from "nodemailer";
+import SibApiV3Sdk from "sib-api-v3-sdk";
 
-const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST,
-  port: Number(process.env.SMTP_PORT),
-  secure: false,
-  auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS,
-  },
-});
-
-transporter.verify((err) => {
-  if (err) {
-    console.error("❌ SMTP VERIFY FAILED:", err);
-  } else {
-    console.log("✅ SMTP READY (BREVO)");
-  }
-});
+const client = SibApiV3Sdk.ApiClient.instance;
+client.authentications["api-key"].apiKey = process.env.BREVO_API_KEY;
 
 export const sendEmail = async ({ to, subject, html }) => {
-  await transporter.sendMail({
-    from: process.env.MAIL_FROM,
-    to,
+  const api = new SibApiV3Sdk.TransactionalEmailsApi();
+
+  await api.sendTransacEmail({
+    sender: {
+      name: "WMS",
+      email: "mywms.connect@gmail.com", // verified sender
+    },
+    to: [{ email: to }],
     subject,
-    html,
+    htmlContent: html,
   });
 };
