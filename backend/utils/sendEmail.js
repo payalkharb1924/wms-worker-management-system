@@ -2,30 +2,28 @@
 import nodemailer from "nodemailer";
 
 const transporter = nodemailer.createTransport({
-  host: "smtp.gmail.com",
-  port: 587,
-  secure: false, // MUST be false for 587
+  host: process.env.SMTP_HOST,
+  port: Number(process.env.SMTP_PORT),
+  secure: false,
   auth: {
-    user: process.env.MAIL_USER,
-    pass: process.env.MAIL_PASS,
+    user: process.env.SMTP_USER,
+    pass: process.env.SMTP_PASS,
   },
-  connectionTimeout: 10000,
-  greetingTimeout: 10000,
 });
-
-export const sendEmail = async ({ to, subject, html }) => {
-  await transporter.sendMail({
-    from: `"WMS" <${process.env.MAIL_USER}>`,
-    to,
-    subject,
-    html,
-  });
-};
 
 transporter.verify((err) => {
   if (err) {
     console.error("❌ SMTP VERIFY FAILED:", err);
   } else {
-    console.log("✅ SMTP READY TO SEND EMAILS");
+    console.log("✅ SMTP READY (BREVO)");
   }
 });
+
+export const sendEmail = async ({ to, subject, html }) => {
+  await transporter.sendMail({
+    from: process.env.MAIL_FROM,
+    to,
+    subject,
+    html,
+  });
+};
