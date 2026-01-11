@@ -65,6 +65,10 @@ const ensureNotificationEnabled = async () => {
     console.error("Token Save Failed", err);
   }
 };
+const truncateText = (text = "", maxLength = 7) => {
+  if (!text) return "";
+  return text.length > maxLength ? text.slice(0, maxLength) + "…" : text;
+};
 
 const SummaryTab = () => {
   const [viewMode, setViewMode] = useState("history"); // "history" | "insights"
@@ -410,8 +414,9 @@ const SummaryTab = () => {
                             <div className="flex-1 flex flex-col gap-[2px]">
                               <div className="flex items-center justify-between gap-2">
                                 <p className="text-sm font-semibold text-gray-900 truncate">
-                                  {workerName}
+                                  {truncateText(workerName, 7)}
                                 </p>
+
                                 <p className="text-sm font-semibold text-emerald-600 whitespace-nowrap">
                                   ₹{s.netAmount?.toFixed(2)}
                                 </p>
@@ -423,8 +428,9 @@ const SummaryTab = () => {
 
                               <div className="flex items-center justify-between mt-[2px]">
                                 <p className="text-[10px] text-gray-500 truncate max-w-[65%]">
-                                  {s.note || "No note added"}
+                                  {truncateText(s.note || "No note added", 10)}
                                 </p>
+
                                 <p className="text-[10px] text-gray-400 whitespace-nowrap">
                                   {createdTime}
                                 </p>
