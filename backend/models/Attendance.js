@@ -7,18 +7,27 @@ const AttendanceSchema = new mongoose.Schema(
       ref: "Worker",
       required: true,
     },
+
     date: {
       type: Date,
-      default: Date.now,
       required: true,
     },
+
+    status: {
+      type: String,
+      enum: ["present", "absent", "inactive"],
+      required: true,
+      default: "present",
+    },
+
+    // work details (ONLY for present)
     startTime: {
       type: Date,
-      required: true,
+      default: null,
     },
     endTime: {
       type: Date,
-      required: true,
+      default: null,
     },
     restMinutes: {
       type: Number,
@@ -30,39 +39,44 @@ const AttendanceSchema = new mongoose.Schema(
     },
     rate: {
       type: Number,
-      required: true,
+      default: null,
     },
+
     note: {
       type: String,
       default: "",
     },
-    hoursWorked: {
-      type: Number,
-      required: true,
-    },
-    total: {
-      type: Number,
-      required: true,
-    },
+
     remarks: {
       type: String,
       default: "",
     },
+
+    hoursWorked: {
+      type: Number,
+      default: 0,
+    },
+
+    total: {
+      type: Number,
+      default: 0,
+    },
+
     isSettled: {
       type: Boolean,
       default: false,
     },
+
     settlementId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Settlement",
       default: null,
     },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
+// 🔒 one entry per worker per day
 AttendanceSchema.index({ workerId: 1, date: 1 }, { unique: true });
 
-const Attendance = mongoose.model("Attendance", AttendanceSchema);
-
-export default Attendance;
+export default mongoose.model("Attendance", AttendanceSchema);

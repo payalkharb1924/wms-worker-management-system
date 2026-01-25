@@ -76,7 +76,7 @@ const MonthWiseSettleModal = ({
   const fetchStartDate = async () => {
     try {
       const res = await api.get(
-        `/settlement/worker/${worker._id}/last-settlement`
+        `/settlement/worker/${worker._id}/last-settlement`,
       );
       const suggestedStartDate = res.data.suggestedStartDate;
 
@@ -107,7 +107,7 @@ const MonthWiseSettleModal = ({
             includeTillToday,
             isViewMode,
           },
-        }
+        },
       );
       setSummary(res.data);
     } catch (error) {
@@ -130,7 +130,7 @@ const MonthWiseSettleModal = ({
             isViewMode,
           },
           responseType: "blob",
-        }
+        },
       );
 
       const url = window.URL.createObjectURL(new Blob([res.data]));
@@ -171,6 +171,22 @@ const MonthWiseSettleModal = ({
       setSettling(false);
     }
   };
+
+  const groupedByMonth = React.useMemo(() => {
+    if (!summary?.entries) return {};
+
+    return summary.entries.reduce((acc, entry) => {
+      const monthKey = new Date(entry.date).toLocaleDateString("en-IN", {
+        month: "long",
+        year: "numeric",
+      });
+
+      if (!acc[monthKey]) acc[monthKey] = [];
+      acc[monthKey].push(entry);
+
+      return acc;
+    }, {});
+  }, [summary]);
 
   if (!isOpen) return null;
 
@@ -334,11 +350,12 @@ const MonthWiseSettleModal = ({
                             Description
                           </th>
                           <th className="text-right py-3 px-3 w-[100px]">
-                            Debit
+                            To be Paid
                           </th>
                           <th className="text-right py-3 px-3 w-[100px]">
-                            Credit
+                            Paid
                           </th>
+
                           <th className="text-right py-3 px-3 w-[120px]">
                             Balance
                           </th>
@@ -346,43 +363,133 @@ const MonthWiseSettleModal = ({
                       </thead>
 
                       <tbody>
-                        {summary.entries.map((entry, index) => (
-                          <tr
-                            key={index}
-                            className={`border-b ${
-                              entry.settled
-                                ? "text-gray-400 line-through"
-                                : "hover:bg-gray-50"
-                            }`}
-                          >
-                            <td className="px-3 py-3 whitespace-nowrap">
-                              {entry.date}
-                            </td>
+                        {Object.entries(groupedByMonth).map(
+                          ([month, entries]) => {
+                            // month totals
+                            let monthPaid = 0;
+                            let monthEarned = 0;
 
-                            <td className="px-3 py-3 capitalize whitespace-nowrap">
-                              {entry.settled && (
-                                <span className="text-blue-500 mr-1">•</span>
-                              )}
-                              {entry.type}
-                            </td>
+                            // rate-wise hours
+                            const rateWise = {};
 
-                            <td className="px-3 py-3 text-gray-700">
-                              {entry.description}
-                            </td>
+                            entries.forEach((e) => {
+                              if (!e.settled) {
+                                monthPaid += e.debit || 0;
+                                monthEarned += e.credit || 0;
+                              }
 
-                            <td className="px-3 py-3 text-right text-red-600 whitespace-nowrap">
-                              {entry.debit > 0 ? `₹${entry.debit}` : ""}
-                            </td>
+                              if (
+                                e.type === "attendance" &&
+                                e.hoursWorked &&
+                                e.rate
+                              ) {
+                                if (!rateWise[e.rate]) {
+                                  rateWise[e.rate] = { hours: 0, amount: 0 };
+                                }
+                                rateWise[e.rate].hours += e.hoursWorked;
+                                rateWise[e.rate].amount +=
+                                  e.hoursWorked * e.rate;
+                              }
+                            });
 
-                            <td className="px-3 py-3 text-right text-green-600 whitespace-nowrap">
-                              {entry.credit > 0 ? `₹${entry.credit}` : ""}
-                            </td>
+                            return (
+                              <React.Fragment key={month}>
+                                {/* Month Header */}
+                                <tr className="bg-gray-100">
+                                  <td
+                                    colSpan={6}
+                                    className="px-3 py-2 font-semibold text-gray-700 uppercase text-xs"
+                                  >
+                                    {month}
+                                  </td>
+                                </tr>
 
-                            <td className="px-3 py-3 text-right font-semibold whitespace-nowrap">
-                              {entry.settled ? "—" : `₹${entry.runningBalance}`}
-                            </td>
-                          </tr>
-                        ))}
+                                {/* Month Entries */}
+                                {entries.map((entry, index) => (
+                                  <tr
+                                    key={index}
+                                    className={`border-b ${
+                                      entry.settled
+                                        ? "text-gray-400 line-through"
+                                        : "hover:bg-gray-50"
+                                    }`}
+                                  >
+                                    <td className="px-3 py-3 whitespace-nowrap">
+                                      {formatDateHuman(entry.date)}
+                                    </td>
+
+                                    <td className="px-3 py-3 capitalize whitespace-nowrap">
+                                      {entry.settled && (
+                                        <span className="text-blue-500 mr-1">
+                                          •
+                                        </span>
+                                      )}
+                                      {entry.type}
+                                    </td>
+
+                                    <td className="px-3 py-3 text-gray-700">
+                                      {entry.description}
+                                    </td>
+
+                                    <td className="px-3 py-3 text-right text-green-600">
+                                      {entry.credit > 0
+                                        ? `₹${entry.credit}`
+                                        : "—"}
+                                    </td>
+
+                                    <td className="px-3 py-3 text-right text-red-600">
+                                      {entry.debit > 0 ? `₹${entry.debit}` : ""}
+                                    </td>
+
+                                    <td className="px-3 py-3 text-right font-semibold">
+                                      {entry.settled
+                                        ? "—"
+                                        : `₹${entry.runningBalance}`}
+                                    </td>
+                                  </tr>
+                                ))}
+
+                                {/* Month Summary BOX */}
+                                <tr>
+                                  <td colSpan={6}>
+                                    <div className="grid grid-cols-[1fr_260px] gap-4">
+                                      {/* LEFT = spacer (keeps alignment) */}
+                                      <div />
+
+                                      {/* RIGHT = Month Summary */}
+                                      <div className="border rounded-xl bg-gray-50 p-3 text-sm space-y-2">
+                                        <p className="font-semibold">
+                                          Month Summary
+                                        </p>
+
+                                        <div className="flex justify-between">
+                                          <span>Paid</span>
+                                          <span className="text-red-600">
+                                            ₹{monthPaid}
+                                          </span>
+                                        </div>
+
+                                        <div className="flex justify-between">
+                                          <span>Earned</span>
+                                          <span className="text-green-600">
+                                            ₹{monthEarned}
+                                          </span>
+                                        </div>
+
+                                        <div className="flex justify-between font-semibold border-t pt-1">
+                                          <span>Net for Month</span>
+                                          <span>
+                                            ₹{monthEarned - monthPaid}
+                                          </span>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </td>
+                                </tr>
+                              </React.Fragment>
+                            );
+                          },
+                        )}
                       </tbody>
 
                       <tfoot className="bg-gray-50">

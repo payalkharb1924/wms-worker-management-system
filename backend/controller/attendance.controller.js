@@ -20,6 +20,7 @@ export const createAttendance = async (req, res) => {
     const {
       workerId,
       date,
+      status, // present | absent | inactive
       startTime,
       endTime,
       restMinutes = 0,
@@ -28,73 +29,108 @@ export const createAttendance = async (req, res) => {
       note,
       remarks,
     } = req.body;
-    if (!workerId || !date || !startTime || !endTime || !rate) {
-      return res.status(400).json({ msg: "Missing fields" });
-    }
-    const worker = await Worker.findById(workerId);
-    if (!worker) return res.status(400).json({ msg: "Worker not found" });
-    if (worker.farmerId.toString() !== req.user.id) {
-      return res
-        .status(403)
-        .json({ msg: "Not authorized to create Attendance" });
-    }
-    const attendanceDate = new Date(`${date}T12:00:00.000Z`);
 
-    // This ensures:
-    //     2025-11-15 5 PM
-    //     2025-11-15 1 AM
-    //     Are considered same date.
+    // basic validation
+    if (!workerId || !date || !status) {
+      return res.status(400).json({ msg: "Missing required fields" });
+    }
+
+    const worker = await Worker.findById(workerId);
+    if (!worker) return res.status(404).json({ msg: "Worker not found" });
+
+    if (worker.farmerId.toString() !== req.user.id) {
+      return res.status(403).json({ msg: "Not authorized" });
+    }
+
+    const attendanceDate = new Date(`${date}T12:00:00.000Z`);
 
     // ❌ block backdated attendance after settlement
     const lastSettledDate = await getLastSettledDate(workerId);
-
     if (lastSettledDate && attendanceDate <= lastSettledDate) {
-      const blockedTill = new Date(lastSettledDate);
-      blockedTill.setHours(0, 0, 0, 0);
-
       return res.status(400).json({
-        msg: `Cannot add attendance before or on ${
-          blockedTill.toISOString().split("T")[0]
-        } because already settled till here.`,
+        msg: "Cannot add attendance for settled period",
       });
     }
 
+    // ❌ prevent duplicate
     const alreadyExist = await Attendance.findOne({
       workerId,
       date: attendanceDate,
     });
+
     if (alreadyExist) {
       return res
         .status(409)
         .json({ msg: "Attendance already exists for this date" });
     }
-    const start = new Date(startTime);
-    const end = new Date(endTime);
-    if (end <= start) {
-      return res
-        .status(400)
-        .json({ msg: "End time must be greater than start time" });
-    }
-    if (restMinutes < 0 || missingMinutes < 0) {
-      return res.status(400).json({ msg: "Invalid rest/missing minutes" });
+
+    // =========================
+    // STATUS-BASED LOGIC
+    // =========================
+
+    let hoursWorked = 0;
+    let total = 0;
+    let finalStartTime = null;
+    let finalEndTime = null;
+    let finalRate = null;
+    let finalNote = note || "";
+
+    // 🔵 PRESENT
+    if (status === "present") {
+      if (!startTime || !endTime || !rate) {
+        return res.status(400).json({
+          msg: "Start time, end time and rate are required for present worker",
+        });
+      }
+
+      const start = new Date(startTime);
+      const end = new Date(endTime);
+
+      if (end <= start) {
+        return res
+          .status(400)
+          .json({ msg: "End time must be greater than start time" });
+      }
+
+      const workedMinutes = (end - start) / (1000 * 60);
+      const effectiveMinutes = workedMinutes - restMinutes - missingMinutes;
+
+      if (effectiveMinutes < 0) {
+        return res.status(400).json({ msg: "Invalid work time calculation" });
+      }
+
+      hoursWorked = Number((effectiveMinutes / 60).toFixed(2));
+      total = Number((hoursWorked * rate).toFixed(2));
+
+      finalStartTime = start;
+      finalEndTime = end;
+      finalRate = rate;
     }
 
-    const workedMinutes = (end - start) / (1000 * 60); // minutes
-    const effectiveMinutes = workedMinutes - restMinutes - missingMinutes;
-    if (effectiveMinutes < 0) {
-      return res.status(400).json({ msg: "Invalid (negative work time)" });
+    // 🔴 ABSENT
+    if (status === "absent") {
+      if (!note || !note.trim()) {
+        return res
+          .status(400)
+          .json({ msg: "Note is required for absent worker" });
+      }
     }
-    const hoursWorked = Number((effectiveMinutes / 60).toFixed(2));
-    const total = Number((hoursWorked * rate).toFixed(2));
+
+    // ⚫ INACTIVE
+    if (status === "inactive") {
+      finalNote = "Inactive";
+    }
+
     const attendance = await Attendance.create({
       workerId,
       date: attendanceDate,
-      startTime,
-      endTime,
-      restMinutes,
-      missingMinutes,
-      rate,
-      note,
+      status,
+      startTime: finalStartTime,
+      endTime: finalEndTime,
+      restMinutes: status === "present" ? restMinutes : 0,
+      missingMinutes: status === "present" ? missingMinutes : 0,
+      rate: finalRate,
+      note: finalNote,
       remarks,
       hoursWorked,
       total,
@@ -105,8 +141,8 @@ export const createAttendance = async (req, res) => {
       attendance,
     });
   } catch (error) {
-    console.log("Error in Creating Attendance", error);
-    return res.status(501).json({ msg: "Error in create Attendance" });
+    console.error("Create Attendance Error", error);
+    return res.status(500).json({ msg: "Error creating attendance" });
   }
 };
 
@@ -114,83 +150,98 @@ export const updateAttendance = async (req, res) => {
   try {
     const attendanceId = req.params.id;
     const attendance = await Attendance.findById(attendanceId);
+
     if (!attendance) {
       return res.status(404).json({ msg: "Attendance not found" });
     }
+
     const worker = await Worker.findById(attendance.workerId);
     if (worker.farmerId.toString() !== req.user.id) {
-      return res.status(403).json({ msg: "Unauthorized to update Attendance" });
+      return res.status(403).json({ msg: "Unauthorized" });
     }
-    // ❌ prevent editing settled attendance
+
     if (attendance.isSettled) {
-      return res.status(400).json({
-        msg: "Cannot edit attendance that is already settled",
-      });
+      return res.status(400).json({ msg: "Cannot edit settled attendance" });
     }
 
-    // ❌ prevent editing attendance before last settlement
-    const lastSettledDate = await getLastSettledDate(attendance.workerId);
-    const attendanceDate = new Date(attendance.date);
-    attendanceDate.setHours(0, 0, 0, 0);
+    const {
+      status = attendance.status,
+      startTime,
+      endTime,
+      restMinutes = attendance.restMinutes,
+      missingMinutes = attendance.missingMinutes,
+      rate,
+      note,
+      remarks,
+    } = req.body;
 
-    if (lastSettledDate && attendanceDate <= lastSettledDate) {
-      return res.status(400).json({
-        msg: "Cannot edit attendance from a settled period",
-      });
+    let hoursWorked = 0;
+    let total = 0;
+    let finalStartTime = null;
+    let finalEndTime = null;
+    let finalRate = null;
+    let finalNote = note ?? attendance.note;
+
+    if (status === "present") {
+      if (!startTime || !endTime || !rate) {
+        return res.status(400).json({
+          msg: "Start, end time and rate required for present worker",
+        });
+      }
+
+      const start = new Date(startTime);
+      const end = new Date(endTime);
+
+      if (end <= start) {
+        return res
+          .status(400)
+          .json({ msg: "End time must be greater than start time" });
+      }
+
+      const workedMinutes = (end - start) / (1000 * 60);
+      const effectiveMinutes = workedMinutes - restMinutes - missingMinutes;
+
+      hoursWorked = Number((effectiveMinutes / 60).toFixed(2));
+      total = Number((hoursWorked * rate).toFixed(2));
+
+      finalStartTime = start;
+      finalEndTime = end;
+      finalRate = rate;
     }
 
-    const startTime = req.body.startTime || attendance.startTime;
-    const endTime = req.body.endTime || attendance.endTime;
-    const restMinutes = req.body.restMinutes ?? attendance.restMinutes;
-    const missingMinutes = req.body.missingMinutes ?? attendance.missingMinutes;
-    const rate = req.body.rate || attendance.rate;
-    const note = req.body.note ?? attendance.note;
-    const remarks = req.body.remarks ?? attendance.remarks;
+    if (status === "absent" && (!finalNote || !finalNote.trim())) {
+      return res.status(400).json({ msg: "Note required for absent worker" });
+    }
 
-    const start = new Date(startTime);
-    const end = new Date(endTime);
-    if (end <= start) {
-      return res
-        .status(400)
-        .json({ msg: "End time must be greater than start time" });
+    if (status === "inactive") {
+      finalNote = "Inactive";
     }
-    if (restMinutes < 0 || missingMinutes < 0) {
-      return res.status(400).json({ msg: "Invalid rest/missing minutes" });
-    }
-    const workedMinutes = (end - start) / (1000 * 60);
-    const effectiveMinutes = workedMinutes - restMinutes - missingMinutes;
-    if (effectiveMinutes < 0) {
-      return res.status(400).json({ msg: "Invalid (negative work time)" });
-    }
-    const hoursWorked = Number((effectiveMinutes / 60).toFixed(2));
-    const total = Number((hoursWorked * rate).toFixed(2));
-    const updatedAttendance = await Attendance.findByIdAndUpdate(
-      attendanceId,
-      {
-        startTime,
-        endTime,
-        restMinutes,
-        missingMinutes,
-        rate,
-        note,
-        remarks,
-        total,
-        hoursWorked,
-      },
-      { new: true }
+
+    attendance.status = status;
+    attendance.startTime = finalStartTime;
+    attendance.endTime = finalEndTime;
+    attendance.restMinutes = status === "present" ? restMinutes : 0;
+    attendance.missingMinutes = status === "present" ? missingMinutes : 0;
+    attendance.rate = finalRate;
+    attendance.note = finalNote;
+    attendance.remarks = remarks ?? attendance.remarks;
+    attendance.hoursWorked = hoursWorked;
+    attendance.total = total;
+
+    await attendance.save();
+
+    const populated = await Attendance.findById(attendance._id).populate(
+      "workerId",
+      "name",
     );
 
-    const populatedUpdated = await Attendance.findById(
-      updatedAttendance._id
-    ).populate("workerId", "name");
-
     return res.status(200).json({
-      msg: "Attendance Updated",
-      updatedAttendance: populatedUpdated,
+      msg: "Attendance updated",
+      updatedAttendance: populated,
     });
   } catch (error) {
-    console.log("Error in Updating Attendance", error);
-    return res.status(501).json({ msg: "Error in update Attendance" });
+    console.error("Update Attendance Error", error);
+    return res.status(500).json({ msg: "Error updating attendance" });
   }
 };
 

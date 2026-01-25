@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useSelector, useDispatch } from "react-redux";
 import { logout } from "../features/auth/authSlice.js";
 import { loadUser } from "../features/auth/authActions";
@@ -15,7 +15,7 @@ import { createAdvanceTour } from "../tour/advancesTour";
 import { requestNotificationPermission, messaging } from "../firebase.js";
 import { onMessage } from "firebase/messaging";
 import axios from "../api/axios.js";
-import { LogOut, Settings, Bell, X, Check } from "lucide-react";
+import { LogOut, Settings, Bell, X, Check, Menu } from "lucide-react";
 
 const Dashboard = () => {
   const { user, token } = useSelector((state) => state.auth);
@@ -29,8 +29,10 @@ const Dashboard = () => {
 
   const [showSettings, setShowSettings] = useState(false);
   const [notificationsEnabled, setNotificationsEnabled] = useState(
-    Notification.permission === "granted"
+    Notification.permission === "granted",
   );
+
+  const menuRef = useRef(null);
 
   const dispatch = useDispatch();
   const navigate = useNavigate();
@@ -158,10 +160,27 @@ const Dashboard = () => {
     setActiveTab(tab);
   };
 
+  useEffect(() => {
+    if (!menuOpen) return;
+
+    const handleClickOutside = (e) => {
+      if (menuRef.current && !menuRef.current.contains(e.target)) {
+        setMenuOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [menuOpen]);
+
+
   return (
     <div className="min-h-screen primary-bg p-5 flex flex-col">
       {/* Header */}
-      <div className="flex justify-between items-center text-white mb-6">
+      <div className="flex justify-between items-center text-white mb-3">
         <div>
           <h2 className="text-2xl font-bold">
             Hi! {user?.name || "Farmer"} 👋
@@ -170,20 +189,32 @@ const Dashboard = () => {
         </div>
         <div className="flex items-center space-x-4">
           {/* Hamburger Menu */}
-          <div className="relative">
+          <div className="relative" ref={menuRef}>
             <button
-              onClick={() => setMenuOpen(!menuOpen)}
+              onClick={(e) => {
+                e.stopPropagation();
+                setMenuOpen((v) => !v);
+              }}
               className="w-10 h-10 flex items-center justify-center bg-black/10 rounded-lg"
             >
-              <span className="text-2xl">☰</span>
+              <span className="text-2xl">
+                <Menu />
+              </span>
             </button>
             {/* Dropdown */}
             {menuOpen && (
-              <div className="absolute right-0 mt-2 w-44 bg-white/80 backdrop-blur-md border border-white/30 text-black shadow-xl rounded-xl p-2">
+              <div
+                className="fixed right-5 top-20 w-44 
+  bg-white/90 backdrop-blur-md
+  border border-white/30
+  text-black shadow-xl rounded-xl p-2
+  z-[9999]"
+              >
                 <button
                   onClick={() => {
                     setMenuOpen(false);
                     setShowSettings(true);
+                    e.stopPropagation();
                   }}
                   className="w-full flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-black/5"
                 >
@@ -231,7 +262,7 @@ const Dashboard = () => {
 
       {/* Content Area */}
       <div
-        className="bg-white mt-5 rounded-xl p-4 shadow-md 
+        className="bg-white mt-1 rounded-xl p-4 shadow-md 
   flex-1 overflow-y-auto max-h-[calc(100vh-190px)] relative scroll-smooth no-scrollbar min-h-[450px]"
       >
         {activeTab === "Workers" && <WorkersTab />}
@@ -261,7 +292,7 @@ const Dashboard = () => {
                   onClick={() => {
                     localStorage.setItem(
                       "notifications_prompt_dismissed",
-                      "true"
+                      "true",
                     );
                     setShowNotificationPrompt(false);
                   }}
@@ -274,7 +305,7 @@ const Dashboard = () => {
                     setShowNotificationPrompt(false);
                     localStorage.setItem(
                       "notifications_prompt_dismissed",
-                      "true"
+                      "true",
                     );
 
                     const token = await requestNotificationPermission();
@@ -373,7 +404,7 @@ const Dashboard = () => {
 
                         setNotificationsEnabled(true);
                         localStorage.removeItem(
-                          "notifications_prompt_dismissed"
+                          "notifications_prompt_dismissed",
                         );
 
                         await axios.post("/notifications/tokens", {
@@ -392,7 +423,7 @@ const Dashboard = () => {
                         });
                       } else {
                         alert(
-                          "Notifications are blocked in browser settings. Please enable them from site settings."
+                          "Notifications are blocked in browser settings. Please enable them from site settings.",
                         );
                       }
                     } else {

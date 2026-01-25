@@ -14,7 +14,7 @@ const AttendanceTab = () => {
   const [updateLoading, setUpdateLoading] = useState(false);
   const [historySearchLoading, setHistorySearchLoading] = useState(false);
   const [selectedDate, setSelectedDate] = useState(
-    new Date().toISOString().split("T")[0]
+    new Date().toISOString().split("T")[0],
   );
   // History state
   const [startDate, setStartDate] = useState("");
@@ -37,14 +37,17 @@ const AttendanceTab = () => {
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [editingRecord, setEditingRecord] = useState(null);
   const [editForm, setEditForm] = useState({
+    status: "present",
     startTime: "",
     endTime: "",
+    hoursWorked: "",
     rate: "",
     restMinutes: 0,
     missingMinutes: 0,
     note: "",
     remarks: "",
   });
+
   const longPressTimeoutRef = useRef(null);
   const scrollRef = useRef(null);
   const [showShadowTop, setShowShadowTop] = useState(false);
@@ -59,14 +62,17 @@ const AttendanceTab = () => {
   };
 
   const updateWorker = (id, field, value) => {
-    setWorkers((prev) =>
-      prev.map((worker) => {
-        if (applyToAll && worker.present) {
-          return { ...worker, [field]: value };
-        }
-        return worker._id === id ? { ...worker, [field]: value } : worker;
-      })
-    );
+    setWorkers((prev) => {
+      if (!applyToAll) {
+        return prev.map((w) => (w._id === id ? { ...w, [field]: value } : w));
+      }
+
+      // APPLY TO ALL
+      return prev.map((w) => ({
+        ...w,
+        [field]: value,
+      }));
+    });
   };
 
   const handleSaveAttendance = async () => {
@@ -74,34 +80,75 @@ const AttendanceTab = () => {
       return toast.error("Please select a date");
     }
 
+    const unmarkedWorkers = workers.filter(
+      (w) => w.status !== "inactive" && !w.attendanceStatus,
+    );
+
+    if (unmarkedWorkers.length > 0) {
+      return toast.error(
+        `Please mark attendance for all workers (present or absent)`,
+      );
+    }
+
     const entries = workers
-      .filter((w) => w.present)
+      .filter((w) => w.attendanceStatus) // present | absent | inactive
       .map((w) => {
-        // 👉 If Hours Worked provided, auto-generate start/end (local, no timezone issues)
+        // ===============================
+        // 🔴 ABSENT
+        // ===============================
+        if (w.attendanceStatus === "absent") {
+          return {
+            workerId: w._id,
+            date: selectedDate,
+            status: "absent",
+            note: w.note, // REQUIRED (validated before save)
+            remarks: w.remarks || "",
+          };
+        }
+
+        // ===============================
+        // ⚫ INACTIVE
+        // ===============================
+        if (w.attendanceStatus === "inactive") {
+          return {
+            workerId: w._id,
+            date: selectedDate,
+            status: "inactive",
+            note: "Inactive",
+            remarks: "",
+          };
+        }
+
+        // ===============================
+        // 🟢 PRESENT (KEEP EXISTING LOGIC)
+        // ===============================
+
+        // 👉 If Hours Worked provided, auto-generate start/end
         if (w.hoursWorked && w.hoursWorked > 0) {
           const hours = Number(w.hoursWorked);
 
           // Base start: 09:00
-          const startDate = new Date(2000, 0, 1, 9, 0); // year, monthIndex, day, hour, minute
+          const startDate = new Date(2000, 0, 1, 9, 0);
           const endDate = new Date(
-            startDate.getTime() + hours * 60 * 60 * 1000
+            startDate.getTime() + hours * 60 * 60 * 1000,
           );
 
           const pad = (n) => n.toString().padStart(2, "0");
 
           const startStr = `${pad(startDate.getHours())}:${pad(
-            startDate.getMinutes()
+            startDate.getMinutes(),
           )}`;
           const endStr = `${pad(endDate.getHours())}:${pad(
-            endDate.getMinutes()
+            endDate.getMinutes(),
           )}`;
 
           return {
             workerId: w._id,
             date: selectedDate,
+            status: "present",
             startTime: `${selectedDate}T${startStr}`,
             endTime: `${selectedDate}T${endStr}`,
-            hoursWorked: hours, // optional: for backend if it uses it
+            hoursWorked: hours, // optional (backend ignores if recalculated)
             restMinutes: w.restMinutes || 0,
             missingMinutes: w.missingMinutes || 0,
             rate: w.rate,
@@ -110,10 +157,11 @@ const AttendanceTab = () => {
           };
         }
 
-        // 👉 Otherwise, use actual start + end (fallback to 09:00 if missing)
+        // 👉 Otherwise, use actual start + end (fallback to 09:00)
         return {
           workerId: w._id,
           date: selectedDate,
+          status: "present",
           startTime: w.startTime
             ? `${selectedDate}T${w.startTime}`
             : `${selectedDate}T09:00`,
@@ -130,6 +178,14 @@ const AttendanceTab = () => {
 
     if (entries.length === 0) {
       return toast.error("Mark at least one worker Present");
+    }
+
+    const invalidAbsent = workers.some(
+      (w) => w.attendanceStatus === "absent" && (!w.note || !w.note.trim()),
+    );
+
+    if (invalidAbsent) {
+      return toast.error("Please add reason for absent workers");
     }
 
     try {
@@ -151,7 +207,7 @@ const AttendanceTab = () => {
     setWorkers((prev) =>
       prev.map((w) => ({
         ...w,
-        present: false,
+        attendanceStatus: null, // "present" | "absent"
         startTime: "",
         endTime: "",
         restMinutes: 0,
@@ -159,14 +215,19 @@ const AttendanceTab = () => {
         rate: "",
         note: "",
         remarks: "",
-      }))
+      })),
     );
   };
 
   const fetchWorkers = async () => {
     try {
       const res = await api.get("/workers");
-      setWorkers(res.data.workers || []);
+      setWorkers(
+        (res.data.workers || []).map((w) => ({
+          ...w,
+          attendanceStatus: "absent",
+        })),
+      );
     } catch (error) {
       toast.error("Failed to load workers");
     } finally {
@@ -182,7 +243,7 @@ const AttendanceTab = () => {
     try {
       setHistoryLoading(true);
       const res = await api.get(
-        `/attendance/range?startDate=${startDate}&endDate=${endDate}`
+        `/attendance/range?startDate=${startDate}&endDate=${endDate}`,
       );
       const list = res.data.attendance || [];
       setHistory(list);
@@ -216,9 +277,10 @@ const AttendanceTab = () => {
 
       return prev.map((w) => ({
         ...w,
-        present: true,
+        attendanceStatus: first.attendanceStatus,
         startTime: first.startTime,
         endTime: first.endTime,
+        hoursWorked: first.hoursWorked,
         rate: first.rate,
         restMinutes: first.restMinutes,
         missingMinutes: first.missingMinutes,
@@ -230,7 +292,7 @@ const AttendanceTab = () => {
 
   const startHistoryGesturesTourIfNeeded = () => {
     const completed = localStorage.getItem(
-      "tour.attendance.history.gestures.completed"
+      "tour.attendance.history.gestures.completed",
     );
 
     if (completed) return;
@@ -336,7 +398,7 @@ const AttendanceTab = () => {
         day: "2-digit",
         month: "short",
         year: "numeric",
-      }
+      },
     );
     setExpandedDates((prev) => ({ ...prev, [dateKey]: true }));
 
@@ -384,7 +446,7 @@ const AttendanceTab = () => {
           margin: "0 auto",
           padding: "20px 28px",
         },
-      }
+      },
     );
   };
 
@@ -443,7 +505,7 @@ const AttendanceTab = () => {
         () => {
           attendanceTour.next();
         },
-        { once: true }
+        { once: true },
       );
     }
 
@@ -480,14 +542,16 @@ const AttendanceTab = () => {
     };
 
     setEditForm({
-      startTime: toTimeInput(record.startTime),
-      endTime: toTimeInput(record.endTime),
-      rate: record.rate,
+      status: record.status,
+      startTime: record.startTime ? toTimeInput(record.startTime) : "",
+      endTime: record.endTime ? toTimeInput(record.endTime) : "",
+      hoursWorked: record.hoursWorked || "",
+      rate: record.rate || "",
       restMinutes: record.restMinutes || 0,
       missingMinutes: record.missingMinutes || 0,
       note: record.note || "",
       remarks: record.remarks || "",
-      _dateStr: dateStr, // for later recomposition
+      _dateStr: dateStr,
     });
 
     setEditModalOpen(true);
@@ -508,21 +572,55 @@ const AttendanceTab = () => {
 
     const dateStr = editForm._dateStr;
     const payload = {
-      startTime: `${dateStr}T${editForm.startTime}`,
-      endTime: `${dateStr}T${editForm.endTime}`,
-      rate: editForm.rate,
-      restMinutes: editForm.restMinutes,
-      missingMinutes: editForm.missingMinutes,
+      status: editForm.status,
       note: editForm.note,
       remarks: editForm.remarks,
     };
+
+    if (editForm.status === "present") {
+      payload.rate = editForm.rate;
+      payload.restMinutes = editForm.restMinutes;
+      payload.missingMinutes = editForm.missingMinutes;
+
+      // 👉 If Hours Worked is provided
+      if (editForm.hoursWorked && editForm.hoursWorked > 0) {
+        const hours = Number(editForm.hoursWorked);
+
+        const startDate = new Date(2000, 0, 1, 9, 0);
+        const endDate = new Date(startDate.getTime() + hours * 60 * 60 * 1000);
+
+        const pad = (n) => n.toString().padStart(2, "0");
+
+        const startStr = `${pad(startDate.getHours())}:${pad(
+          startDate.getMinutes(),
+        )}`;
+        const endStr = `${pad(endDate.getHours())}:${pad(endDate.getMinutes())}`;
+
+        payload.startTime = `${dateStr}T${startStr}`;
+        payload.endTime = `${dateStr}T${endStr}`;
+        payload.hoursWorked = hours;
+      } else {
+        // 👉 Otherwise use manual start/end
+        payload.startTime = `${dateStr}T${editForm.startTime}`;
+        payload.endTime = `${dateStr}T${editForm.endTime}`;
+        payload.hoursWorked = undefined;
+      }
+    }
+
+    if (
+      editForm.status === "absent" &&
+      (!editForm.note || !editForm.note.trim())
+    ) {
+      setUpdateLoading(false);
+      return toast.error("Reason is required for absent worker");
+    }
 
     try {
       const res = await api.put(`/attendance/${editingRecord._id}`, payload);
       const updated = res.data.updatedAttendance;
 
       setHistory((prev) =>
-        prev.map((item) => (item._id === updated._id ? updated : item))
+        prev.map((item) => (item._id === updated._id ? updated : item)),
       );
       toast.success("Attendance updated");
       window.dispatchEvent(new Event("demo:attendance-edited"));
@@ -537,11 +635,11 @@ const AttendanceTab = () => {
 
   // 👇 Only ACTIVE workers for Daily Attendance
   const activeWorkers = workers.filter(
-    (w) => w.status === "active" || !w.status
+    (w) => w.status === "active" || !w.status,
   );
 
   const searchedWorkers = activeWorkers.filter((w) =>
-    w.name?.toLowerCase().includes(searchQuery.toLowerCase())
+    w.name?.toLowerCase().includes(searchQuery.toLowerCase()),
   );
 
   return (
@@ -577,9 +675,9 @@ const AttendanceTab = () => {
       {viewMode === "daily" && (
         <div className="flex flex-col h-[calc(100vh-180px)]">
           {/* Apply to All & Date */}
-          <div className="grid grid-cols-2 gap-4 items-center mb-4">
+          <div className="grid grid-cols-2 gap-4 items-center mb-3">
             {/* Apply to all */}
-            <div className="attendance-apply-all flex pt-3 items-center gap-2">
+            <div className="attendance-apply-all flex pt-3 items-center gap-0">
               <label className="text-sm font-medium whitespace-nowrap">
                 Apply to all
               </label>
@@ -590,7 +688,7 @@ const AttendanceTab = () => {
                   onChange={(e) => {
                     setApplyToAll(e.target.checked);
                     window.dispatchEvent(
-                      new Event("demo:attendance-apply-all")
+                      new Event("demo:attendance-apply-all"),
                     );
                   }}
                 />
@@ -622,7 +720,7 @@ const AttendanceTab = () => {
               placeholder="Search worker..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="attendance-search w-full px-4 py-2.5 rounded-xl border border-gray-200 
+              className="attendance-search w-full px-4 py-1 rounded-xl border border-gray-200 
                text-sm bg-white/80 backdrop-blur-sm
                focus:outline-none focus:ring-2 
                focus:ring-[var(--primary)]/20 
@@ -685,8 +783,8 @@ const AttendanceTab = () => {
                         prev.map((x) =>
                           x._id === w._id
                             ? { ...x, isExpanded: !isExpanded }
-                            : { ...x, isExpanded: false }
-                        )
+                            : { ...x, isExpanded: false },
+                        ),
                       );
 
                       // 👇 Auto-scroll the expanded card into view
@@ -699,7 +797,7 @@ const AttendanceTab = () => {
                           });
                       }, 150);
                       window.dispatchEvent(
-                        new Event("demo:attendance-expanded")
+                        new Event("demo:attendance-expanded"),
                       );
                     }}
                   >
@@ -707,19 +805,46 @@ const AttendanceTab = () => {
                     <div className="flex justify-between items-center">
                       <p className="font-semibold text-gray-800">{w.name}</p>
 
-                      <label className="attendance-present-toggle text-xs flex items-center gap-1">
-                        Present
-                        <label
-                          className="toggle-switch"
-                          onClick={(e) => e.stopPropagation()}
+                      <label className="text-xs flex items-center gap-2">
+                        <span
+                          className={`font-semibold ${
+                            w.attendanceStatus === "present"
+                              ? "text-green-600"
+                              : "text-red-500"
+                          }`}
                         >
+                          {w.attendanceStatus === "present"
+                            ? "Present"
+                            : "Absent"}
+                        </span>
+
+                        <label className="toggle-switch">
                           <input
                             type="checkbox"
-                            checked={w.present || false}
+                            checked={w.attendanceStatus === "present"}
                             onChange={(e) => {
-                              updateWorker(w._id, "present", e.target.checked);
-                              window.dispatchEvent(
-                                new Event("demo:attendance-present")
+                              const status = e.target.checked
+                                ? "present"
+                                : "absent";
+                              setWorkers((prev) =>
+                                prev.map((x) =>
+                                  x._id === w._id
+                                    ? {
+                                        ...x,
+                                        attendanceStatus: status,
+                                        // clear irrelevant fields
+                                        ...(status === "present"
+                                          ? { note: "" }
+                                          : {
+                                              startTime: "",
+                                              endTime: "",
+                                              hoursWorked: "",
+                                              restMinutes: 0,
+                                              missingMinutes: 0,
+                                            }),
+                                      }
+                                    : x,
+                                ),
                               );
                             }}
                           />
@@ -728,196 +853,220 @@ const AttendanceTab = () => {
                       </label>
                     </div>
 
-                    {/* Always visible */}
-                    <div className="grid grid-cols-2 gap-3">
-                      <div
-                        className="flex flex-col space-y-1"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <label className="text-[11px] font-medium text-gray-500 tracking-wide">
-                          Start
-                        </label>
-                        <input
-                          type="time"
-                          value={w.startTime || ""}
-                          onChange={(e) =>
-                            updateWorker(w._id, "startTime", e.target.value)
-                          }
-                          className="border border-gray-200 rounded-xl px-3 py-2 text-sm 
+                    {w.attendanceStatus === "present" && (
+                      <>
+                        {/* Always visible */}
+                        <div className="grid grid-cols-2 gap-3">
+                          <div
+                            className="flex flex-col space-y-1"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <label className="text-[11px] font-medium text-gray-500 tracking-wide">
+                              Start
+                            </label>
+                            <input
+                              type="time"
+                              value={w.startTime || ""}
+                              onChange={(e) =>
+                                updateWorker(w._id, "startTime", e.target.value)
+                              }
+                              className="border border-gray-200 rounded-xl px-3 py-2 text-sm 
            max-w-[120px]
            bg-white/80 backdrop-blur-sm
            focus:outline-none 
            focus:ring-2 focus:ring-[var(--primary)]/20 
            focus:border-[var(--primary)] 
            transition"
-                        />
-                      </div>
+                            />
+                          </div>
 
-                      <div
-                        className="flex flex-col space-y-1"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <label className="text-[11px] font-medium text-gray-500 tracking-wide">
-                          End
-                        </label>
-                        <input
-                          type="time"
-                          value={w.endTime || ""}
-                          onChange={(e) =>
-                            updateWorker(w._id, "endTime", e.target.value)
-                          }
-                          className="border border-gray-200 rounded-xl px-3 py-2 text-sm 
+                          <div
+                            className="flex flex-col space-y-1"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <label className="text-[11px] font-medium text-gray-500 tracking-wide">
+                              End
+                            </label>
+                            <input
+                              type="time"
+                              value={w.endTime || ""}
+                              onChange={(e) =>
+                                updateWorker(w._id, "endTime", e.target.value)
+                              }
+                              className="border border-gray-200 rounded-xl px-3 py-2 text-sm 
            max-w-[120px]
            bg-white/80 backdrop-blur-sm
            focus:outline-none 
            focus:ring-2 focus:ring-[var(--primary)]/20 
            focus:border-[var(--primary)] 
            transition"
-                        />
-                      </div>
-                    </div>
+                            />
+                          </div>
+                        </div>
 
-                    {/* EXPANDABLE ZONE */}
-                    <div
-                      className={`transition-[max-height,opacity] duration-300 ease-in-out
+                        {/* EXPANDABLE ZONE */}
+                        <div
+                          className={`transition-[max-height,opacity] duration-300 ease-in-out
  overflow-hidden ${
    isExpanded ? "max-h-[500px] opacity-100" : "max-h-0 opacity-0"
  }`}
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      {/* Rate */}
-                      <div className="flex flex-col space-y-1 mt-2">
-                        <label className="text-[11px] font-medium text-gray-500 tracking-wide">
-                          Rate (₹)
-                        </label>
-                        <input
-                          type="number"
-                          placeholder="Rate"
-                          min={0}
-                          value={w.rate || ""}
-                          onChange={(e) =>
-                            updateWorker(w._id, "rate", Number(e.target.value))
-                          }
-                          className="border border-gray-200 rounded-xl px-3 py-2 text-sm 
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {/* Rate */}
+                          <div className="flex flex-col space-y-1 mt-2">
+                            <label className="text-[11px] font-medium text-gray-500 tracking-wide">
+                              Rate (₹)
+                            </label>
+                            <input
+                              type="number"
+                              placeholder="Rate"
+                              min={0}
+                              value={w.rate || ""}
+                              onChange={(e) =>
+                                updateWorker(
+                                  w._id,
+                                  "rate",
+                                  Number(e.target.value),
+                                )
+                              }
+                              className="border border-gray-200 rounded-xl px-3 py-2 text-sm 
            focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/20 
            focus:border-[var(--primary)] transition"
-                        />
-                      </div>
+                            />
+                          </div>
 
-                      {/* Hours Worked (Direct input alternative) */}
-                      <div className="flex flex-col space-y-1 mt-2">
-                        <label className="text-[11px] font-medium text-gray-500 tracking-wide">
-                          Hours Worked
-                        </label>
-                        <input
-                          type="number"
-                          min="0"
-                          step="0.5"
-                          placeholder="Enter hours directly"
-                          value={w.hoursWorked ?? ""}
-                          onChange={(e) =>
-                            updateWorker(
-                              w._id,
-                              "hoursWorked",
-                              Number(e.target.value)
-                            )
-                          }
-                          className="border border-gray-200 rounded-xl px-3 py-2 text-sm 
+                          {/* Hours Worked (Direct input alternative) */}
+                          <div className="flex flex-col space-y-1 mt-2">
+                            <label className="text-[11px] font-medium text-gray-500 tracking-wide">
+                              Hours Worked
+                            </label>
+                            <input
+                              type="number"
+                              min="0"
+                              step="0.5"
+                              placeholder="Enter hours directly"
+                              value={w.hoursWorked ?? ""}
+                              onChange={(e) =>
+                                updateWorker(
+                                  w._id,
+                                  "hoursWorked",
+                                  Number(e.target.value),
+                                )
+                              }
+                              className="border border-gray-200 rounded-xl px-3 py-2 text-sm 
            focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/20 
            focus:border-[var(--primary)] transition"
-                        />
-                        <small className="text-[10px] text-gray-400">
-                          Leave blank if using start/end time
-                        </small>
-                      </div>
+                            />
+                            <small className="text-[10px] text-gray-400">
+                              Leave blank if using start/end time
+                            </small>
+                          </div>
 
-                      {/* Rest & Missing */}
-                      <div className="grid grid-cols-2 gap-3 mt-2">
-                        <div className="flex flex-col space-y-1">
-                          <label className="text-[11px] font-medium text-gray-500 tracking-wide">
-                            Rest Mins
-                          </label>
-                          <input
-                            type="number"
-                            min={0}
-                            value={w.restMinutes || 0}
-                            onChange={(e) =>
-                              updateWorker(
-                                w._id,
-                                "restMinutes",
-                                Number(e.target.value)
-                              )
-                            }
-                            className="border border-gray-200 rounded-xl px-3 py-2 text-sm 
+                          {/* Rest & Missing */}
+                          <div className="grid grid-cols-2 gap-3 mt-2">
+                            <div className="flex flex-col space-y-1">
+                              <label className="text-[11px] font-medium text-gray-500 tracking-wide">
+                                Rest Mins
+                              </label>
+                              <input
+                                type="number"
+                                min={0}
+                                value={w.restMinutes || 0}
+                                onChange={(e) =>
+                                  updateWorker(
+                                    w._id,
+                                    "restMinutes",
+                                    Number(e.target.value),
+                                  )
+                                }
+                                className="border border-gray-200 rounded-xl px-3 py-2 text-sm 
            focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/20 
            focus:border-[var(--primary)] transition"
-                          />
+                              />
+                            </div>
+
+                            <div className="flex flex-col space-y-1">
+                              <label className="text-[11px] font-medium text-gray-500 tracking-wide">
+                                Missing Mins
+                              </label>
+                              <input
+                                type="number"
+                                min={0}
+                                value={w.missingMinutes || 0}
+                                onChange={(e) =>
+                                  updateWorker(
+                                    w._id,
+                                    "missingMinutes",
+                                    Number(e.target.value),
+                                  )
+                                }
+                                className="border border-gray-200 rounded-xl px-3 py-2 text-sm 
+           focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/20 
+           focus:border-[var(--primary)] transition"
+                              />
+                            </div>
+                          </div>
+
+                          {/* Note */}
+                          <div className="flex flex-col space-y-1 mt-2">
+                            <label className="text-[11px] font-medium text-gray-500 tracking-wide">
+                              Note
+                            </label>
+                            <input
+                              type="text"
+                              placeholder="Notes (optional)"
+                              value={w.note || ""}
+                              onChange={(e) =>
+                                updateWorker(w._id, "note", e.target.value)
+                              }
+                              className="border border-gray-200 rounded-xl px-3 py-2 text-sm 
+           focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/20 
+           focus:border-[var(--primary)] transition"
+                            />
+                          </div>
+
+                          {/* Remarks */}
+                          <div className="flex flex-col space-y-1 mt-2">
+                            <label className="text-[11px] font-medium text-gray-500 tracking-wide">
+                              Remarks
+                            </label>
+                            <input
+                              type="text"
+                              placeholder="Remarks"
+                              value={w.remarks || ""}
+                              onChange={(e) =>
+                                updateWorker(w._id, "remarks", e.target.value)
+                              }
+                              className="border border-gray-200 rounded-xl px-3 py-2 text-sm 
+           focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/20 
+           focus:border-[var(--primary)] transition"
+                            />
+                          </div>
+
+                          {/* Summary */}
+                          <div className="mt-2 flex justify-between text-sm text-gray-500">
+                            <span>Hours: {hours}</span>
+                            <span>Total: ₹ {total}</span>
+                          </div>
                         </div>
-
-                        <div className="flex flex-col space-y-1">
-                          <label className="text-[11px] font-medium text-gray-500 tracking-wide">
-                            Missing Mins
-                          </label>
-                          <input
-                            type="number"
-                            min={0}
-                            value={w.missingMinutes || 0}
-                            onChange={(e) =>
-                              updateWorker(
-                                w._id,
-                                "missingMinutes",
-                                Number(e.target.value)
-                              )
-                            }
-                            className="border border-gray-200 rounded-xl px-3 py-2 text-sm 
-           focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/20 
-           focus:border-[var(--primary)] transition"
-                          />
-                        </div>
-                      </div>
-
-                      {/* Note */}
-                      <div className="flex flex-col space-y-1 mt-2">
-                        <label className="text-[11px] font-medium text-gray-500 tracking-wide">
-                          Note
+                      </>
+                    )}
+                    {w.attendanceStatus === "absent" && (
+                      <div className="mt-3">
+                        <label className="text-xs text-gray-500">
+                          Reason for absence *
                         </label>
                         <input
                           type="text"
-                          placeholder="Notes (optional)"
                           value={w.note || ""}
                           onChange={(e) =>
                             updateWorker(w._id, "note", e.target.value)
                           }
-                          className="border border-gray-200 rounded-xl px-3 py-2 text-sm 
-           focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/20 
-           focus:border-[var(--primary)] transition"
+                          className="border rounded-xl px-3 py-2 text-sm w-full"
+                          placeholder="Reason is required"
                         />
                       </div>
-
-                      {/* Remarks */}
-                      <div className="flex flex-col space-y-1 mt-2">
-                        <label className="text-[11px] font-medium text-gray-500 tracking-wide">
-                          Remarks
-                        </label>
-                        <input
-                          type="text"
-                          placeholder="Remarks"
-                          value={w.remarks || ""}
-                          onChange={(e) =>
-                            updateWorker(w._id, "remarks", e.target.value)
-                          }
-                          className="border border-gray-200 rounded-xl px-3 py-2 text-sm 
-           focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/20 
-           focus:border-[var(--primary)] transition"
-                        />
-                      </div>
-
-                      {/* Summary */}
-                      <div className="mt-2 flex justify-between text-sm text-gray-500">
-                        <span>Hours: {hours}</span>
-                        <span>Total: ₹ {total}</span>
-                      </div>
-                    </div>
+                    )}
                   </div>
                 );
               })}
@@ -967,8 +1116,8 @@ const AttendanceTab = () => {
                     historyFilter === "range"
                       ? "2px"
                       : historyFilter === "single"
-                      ? "33%"
-                      : "66%",
+                        ? "33%"
+                        : "66%",
                 }}
               />
 
@@ -1074,7 +1223,7 @@ const AttendanceTab = () => {
 
                       try {
                         const res = await api.get(
-                          `/attendance/range?startDate=${startDate}&endDate=${startDate}`
+                          `/attendance/range?startDate=${startDate}&endDate=${startDate}`,
                         );
 
                         let list = res.data.attendance || [];
@@ -1084,7 +1233,7 @@ const AttendanceTab = () => {
                           new Date(d1).toDateString() ===
                           new Date(d2).toDateString();
                         list = list.filter((item) =>
-                          sameDay(item.date, startDate)
+                          sameDay(item.date, startDate),
                         );
 
                         setHistory(list);
@@ -1093,7 +1242,7 @@ const AttendanceTab = () => {
                           Object.keys(groupByDate(list)).reduce((acc, key) => {
                             acc[key] = true;
                             return acc;
-                          }, {})
+                          }, {}),
                         );
                       } catch (error) {
                         toast.error("Failed to fetch attendance");
@@ -1157,7 +1306,7 @@ const AttendanceTab = () => {
 
                       try {
                         const res = await api.get(
-                          `/attendance/worker/${editingRecord}`
+                          `/attendance/worker/${editingRecord}`,
                         );
                         let list = res.data.attendance || [];
 
@@ -1165,7 +1314,7 @@ const AttendanceTab = () => {
                           list = list.filter(
                             (item) =>
                               new Date(item.date) >= new Date(startDate) &&
-                              new Date(item.date) <= new Date(endDate)
+                              new Date(item.date) <= new Date(endDate),
                           );
                         }
 
@@ -1174,7 +1323,7 @@ const AttendanceTab = () => {
                           Object.keys(groupByDate(list)).reduce((a, b) => {
                             a[b] = true;
                             return a;
-                          }, {})
+                          }, {}),
                         );
                       } catch (err) {
                         toast.error("Failed to fetch worker attendance");
@@ -1218,10 +1367,15 @@ const AttendanceTab = () => {
           {!historyLoading &&
             history.length > 0 &&
             Object.entries(groupByDate(history)).map(([dateKey, records]) => {
-              const totalHours = records
+              const presentRecords = records.filter(
+                (r) => r.status === "present",
+              );
+
+              const totalHours = presentRecords
                 .reduce((sum, r) => sum + (r.hoursWorked || 0), 0)
                 .toFixed(1);
-              const totalAmount = records
+
+              const totalAmount = presentRecords
                 .reduce((sum, r) => sum + (r.total || 0), 0)
                 .toFixed(2);
 
@@ -1279,6 +1433,8 @@ const AttendanceTab = () => {
                           .toUpperCase();
 
                         const offset = swipeOffsets[item._id] || 0;
+                        const isLocked =
+                          item.isSettled || item.status === "inactive";
 
                         return (
                           <div
@@ -1286,7 +1442,7 @@ const AttendanceTab = () => {
                             className="relative overflow-hidden rounded-xl bg-red-500"
                           >
                             {/* Delete background (only if unsettled) */}
-                            {!item.isSettled && (
+                            {!isLocked && (
                               <div className="absolute inset-0 right-0 flex items-center justify-end overflow-hidden">
                                 <button
                                   className="delete-attendance-btn w-20 h-full rounded-r-xl bg-red-500 text-white font-bold text-[13px] tracking-wide flex items-center justify-center active:scale-95"
@@ -1300,23 +1456,23 @@ const AttendanceTab = () => {
                             {/* Foreground card - touch/swipe/long press */}
                             <div
                               className={`${getCardStyle(
-                                item
+                                item,
                               )} p-3 flex items-start justify-between rounded-xl shadow-sm transition-transform duration-200 ease-out no-select relative history-attendance-card`}
                               style={{
                                 transform: `translateX(${offset}px)`,
-                                pointerEvents: item.isSettled ? "none" : "auto",
+                                pointerEvents: isLocked ? "none" : "auto",
                               }}
                               onTouchStart={(e) =>
-                                !item.isSettled && handleTouchStart(item._id, e)
+                                !isLocked && handleTouchStart(item._id, e)
                               }
                               onTouchMove={(e) =>
-                                !item.isSettled && handleTouchMove(item._id, e)
+                                !isLocked && handleTouchMove(item._id, e)
                               }
                               onTouchEnd={() =>
-                                !item.isSettled && handleTouchEnd(item._id)
+                                !isLocked && handleTouchEnd(item._id)
                               }
                               onMouseDown={() =>
-                                !item.isSettled && startLongPress(item._id)
+                                !isLocked && startLongPress(item._id)
                               }
                               onMouseUp={cancelLongPress}
                               onMouseLeave={cancelLongPress}
@@ -1343,21 +1499,33 @@ const AttendanceTab = () => {
                                   >
                                     {name}
                                   </p>
-                                  <span className="text-[11px] text-gray-500">
-                                    ✔ Present
+                                  <span
+                                    className={`text-[11px] font-medium ${
+                                      item.status === "present"
+                                        ? "text-green-600"
+                                        : item.status === "absent"
+                                          ? "text-red-600"
+                                          : "text-gray-500"
+                                    }`}
+                                  >
+                                    {item.status === "present" && "✔ Present"}
+                                    {item.status === "absent" && "❌ Absent"}
+                                    {item.status === "inactive" &&
+                                      "⛔ Inactive"}
                                   </span>
+                                  {item.status === "absent" && item.note && (
+                                    <p className="mt-1 text-[11px] text-gray-800 italic max-w-[220px]">
+                                      Reason: {item.note}
+                                    </p>
+                                  )}
                                 </div>
                               </div>
 
                               {/* Amount Right Side */}
-                              <span
-                                className={`font-semibold text-sm whitespace-nowrap ${
-                                  item.isSettled
-                                    ? "text-gray-600"
-                                    : "text-gray-800"
-                                }`}
-                              >
-                                {item.hoursWorked}h • ₹{item.total}
+                              <span className="font-semibold text-sm whitespace-nowrap">
+                                {item.status === "present"
+                                  ? `${item.hoursWorked}h • ₹${item.total}`
+                                  : "—"}
                               </span>
                             </div>
                           </div>
@@ -1382,81 +1550,134 @@ const AttendanceTab = () => {
                 <X className="w-4 h-4 text-gray-500" />
               </button>
             </div>
+            {/* Status Switch */}
+            <div className="flex items-center justify-between bg-gray-100 rounded-xl p-2">
+              <span className="text-sm font-medium text-gray-700">
+                Attendance Status
+              </span>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div className="flex flex-col gap-1">
-                <label className="text-xs text-gray-600">Start Time</label>
-                <input
-                  type="time"
-                  value={editForm.startTime}
-                  onChange={(e) =>
-                    handleEditChange("startTime", e.target.value)
-                  }
-                  className="border rounded-md p-2 text-sm focus:outline-none focus:border-[var(--primary)]"
-                />
-              </div>
-              <div className="flex flex-col gap-1">
-                <label className="text-xs text-gray-600">End Time</label>
-                <input
-                  type="time"
-                  value={editForm.endTime}
-                  onChange={(e) => handleEditChange("endTime", e.target.value)}
-                  className="border rounded-md p-2 text-sm focus:outline-none focus:border-[var(--primary)]"
-                />
-              </div>
+              <select
+                value={editForm.status}
+                onChange={(e) => handleEditChange("status", e.target.value)}
+                disabled={editingRecord?.status === "inactive"}
+                className="border rounded-lg px-3 py-1 text-sm focus:outline-none"
+              >
+                <option value="present">Present</option>
+                <option value="absent">Absent</option>
+              </select>
             </div>
 
-            <div className="flex flex-col gap-1">
-              <label className="text-xs text-gray-600">Rate (₹)</label>
-              <input
-                type="number"
-                min="0"
-                value={editForm.rate}
-                onChange={(e) =>
-                  handleEditChange("rate", Number(e.target.value))
-                }
-                className="border rounded-md p-2 text-sm focus:outline-none focus:border-[var(--primary)]"
-              />
-            </div>
+            {editForm.status === "present" && (
+              <>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs text-gray-600">Start Time</label>
+                    <input
+                      type="time"
+                      value={editForm.startTime}
+                      disabled={!!editForm.hoursWorked}
+                      onChange={(e) =>
+                        handleEditChange("startTime", e.target.value)
+                      }
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs text-gray-600">End Time</label>
+                    <input
+                      type="time"
+                      value={editForm.endTime}
+                      disabled={!!editForm.hoursWorked}
+                      onChange={(e) =>
+                        handleEditChange("endTime", e.target.value)
+                      }
+                    />
+                  </div>
+                </div>
+                {/* Hours Worked (Direct Input) */}
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs text-gray-600">Hours Worked</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.5"
+                    placeholder="Enter hours directly"
+                    value={editForm.hoursWorked}
+                    onChange={(e) =>
+                      handleEditChange(
+                        "hoursWorked",
+                        e.target.value === "" ? "" : Number(e.target.value),
+                      )
+                    }
+                    className="border rounded-md p-2 text-sm focus:outline-none focus:border-[var(--primary)]"
+                  />
+                  <span className="text-[10px] text-gray-400">
+                    Leave blank if using start & end time
+                  </span>
+                </div>
 
-            <div className="grid grid-cols-2 gap-3">
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs text-gray-600">Rate (₹)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={editForm.rate}
+                    onChange={(e) =>
+                      handleEditChange("rate", Number(e.target.value))
+                    }
+                    className="border rounded-md p-2 text-sm focus:outline-none focus:border-[var(--primary)]"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs text-gray-600">Rest (mins)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={editForm.restMinutes}
+                      onChange={(e) =>
+                        handleEditChange("restMinutes", Number(e.target.value))
+                      }
+                      className="border rounded-md p-2 text-sm focus:outline-none focus:border-[var(--primary)]"
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs text-gray-600">
+                      Missing (mins)
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={editForm.missingMinutes}
+                      onChange={(e) =>
+                        handleEditChange(
+                          "missingMinutes",
+                          Number(e.target.value),
+                        )
+                      }
+                      className="border rounded-md p-2 text-sm focus:outline-none focus:border-[var(--primary)]"
+                    />
+                  </div>
+                </div>
+              </>
+            )}
+
+            {editForm.status === "absent" && (
               <div className="flex flex-col gap-1">
-                <label className="text-xs text-gray-600">Rest (mins)</label>
+                <label className="text-xs text-gray-600">
+                  Reason for absence *
+                </label>
                 <input
-                  type="number"
-                  min="0"
-                  value={editForm.restMinutes}
-                  onChange={(e) =>
-                    handleEditChange("restMinutes", Number(e.target.value))
-                  }
+                  type="text"
+                  value={editForm.note}
+                  onChange={(e) => handleEditChange("note", e.target.value)}
                   className="border rounded-md p-2 text-sm focus:outline-none focus:border-[var(--primary)]"
+                  placeholder="Reason is required"
                 />
               </div>
-              <div className="flex flex-col gap-1">
-                <label className="text-xs text-gray-600">Missing (mins)</label>
-                <input
-                  type="number"
-                  min="0"
-                  value={editForm.missingMinutes}
-                  onChange={(e) =>
-                    handleEditChange("missingMinutes", Number(e.target.value))
-                  }
-                  className="border rounded-md p-2 text-sm focus:outline-none focus:border-[var(--primary)]"
-                />
-              </div>
-            </div>
+            )}
 
-            <div className="flex flex-col gap-1">
-              <label className="text-xs text-gray-600">Note</label>
-              <input
-                type="text"
-                value={editForm.note}
-                onChange={(e) => handleEditChange("note", e.target.value)}
-                className="border rounded-md p-2 text-sm focus:outline-none focus:border-[var(--primary)]"
-              />
-            </div>
-
-            <div className="flex flex-col gap-1">
+            {/* <div className="flex flex-col gap-1">
               <label className="text-xs text-gray-600">Remarks</label>
               <input
                 type="text"
@@ -1464,7 +1685,7 @@ const AttendanceTab = () => {
                 onChange={(e) => handleEditChange("remarks", e.target.value)}
                 className="border rounded-md p-2 text-sm focus:outline-none focus:border-[var(--primary)]"
               />
-            </div>
+            </div> */}
 
             <button
               onClick={handleUpdateAttendance}
