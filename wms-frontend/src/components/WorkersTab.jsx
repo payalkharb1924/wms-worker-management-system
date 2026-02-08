@@ -202,6 +202,23 @@ const WorkersTab = () => {
     }
   }, [showSettlePopup, pendingSummary]);
 
+  useEffect(() => {
+    if (!showDetails) return;
+
+    // Push state when worker modal opens
+    window.history.pushState({ workerDetails: true }, "");
+
+    const handleBack = () => {
+      setShowDetails(false);
+    };
+
+    window.addEventListener("popstate", handleBack);
+
+    return () => {
+      window.removeEventListener("popstate", handleBack);
+    };
+  }, [showDetails]);
+
   return (
     <div>
       {/* Header */}
@@ -380,7 +397,10 @@ focus:border-[var(--primary)] transition
                 </div>
 
                 <button
-                  onClick={() => setShowDetails(false)}
+                  onClick={() => {
+                    setShowDetails(false);
+                    window.history.back(); // sync history
+                  }}
                   className="w-full mt-3 py-2 bg-gray-200 rounded-md text-sm font-medium"
                 >
                   Close

@@ -449,6 +449,39 @@ const MonthWiseSettleModal = ({
                                   </tr>
                                 ))}
 
+                                {/* Rate-wise Hours Summary */}
+                                {Object.keys(rateWise).length > 0 && (
+                                  <tr>
+                                    <td colSpan={6}>
+                                      <div className="grid grid-cols-[1fr_260px] gap-4 mt-2">
+                                        <div />
+
+                                        <div className="border rounded-xl bg-white p-3 text-xs space-y-1">
+                                          <p className="font-semibold text-gray-700">
+                                            Hours Summary (Rate-wise)
+                                          </p>
+
+                                          {Object.entries(rateWise).map(
+                                            ([rate, data]) => (
+                                              <div
+                                                key={rate}
+                                                className="flex justify-between text-gray-600"
+                                              >
+                                                <span>
+                                                  {data.hours} hr @ ₹{rate}
+                                                </span>
+                                                <span className="font-medium">
+                                                  ₹{data.amount}
+                                                </span>
+                                              </div>
+                                            ),
+                                          )}
+                                        </div>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                )}
+
                                 {/* Month Summary BOX */}
                                 <tr>
                                   <td colSpan={6}>

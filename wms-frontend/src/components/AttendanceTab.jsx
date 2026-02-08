@@ -46,7 +46,26 @@ const AttendanceTab = () => {
     missingMinutes: 0,
     note: "",
     remarks: "",
+    segments: [],
+    isSplit: false,
   });
+  useEffect(() => {
+    if (!editModalOpen) return;
+
+    // push state when modal opens
+    window.history.pushState({ editModal: true }, "");
+
+    const handlePopState = () => {
+      setEditModalOpen(false);
+      setEditingRecord(null);
+    };
+
+    window.addEventListener("popstate", handlePopState);
+
+    return () => {
+      window.removeEventListener("popstate", handlePopState);
+    };
+  }, [editModalOpen]);
 
   const longPressTimeoutRef = useRef(null);
   const scrollRef = useRef(null);
@@ -93,6 +112,18 @@ const AttendanceTab = () => {
     const entries = workers
       .filter((w) => w.attendanceStatus) // present | absent | inactive
       .map((w) => {
+        // MULTI SEGMENT PRESENT
+        if (w.attendanceStatus === "present" && w.multiMode) {
+          return {
+            workerId: w._id,
+            date: selectedDate,
+            status: "present",
+            segments: w.segments,
+            note: w.note || "",
+            remarks: w.remarks || "",
+          };
+        }
+
         // ===============================
         // 🔴 ABSENT
         // ===============================
@@ -190,6 +221,14 @@ const AttendanceTab = () => {
 
     try {
       setSaving(true);
+      const invalidSegments = workers.some(
+        (w) => w.multiMode && w.segments.some((s) => !s.hoursWorked || !s.rate),
+      );
+
+      if (invalidSegments) {
+        return toast.error("Fill hours and rate for all parts");
+      }
+
       for (const entry of entries) {
         await api.post("/attendance/add", entry);
       }
@@ -222,10 +261,18 @@ const AttendanceTab = () => {
   const fetchWorkers = async () => {
     try {
       const res = await api.get("/workers");
+
       setWorkers(
         (res.data.workers || []).map((w) => ({
           ...w,
           attendanceStatus: "absent",
+          multiMode: false, // 👈 new
+          segments: [
+            {
+              hoursWorked: "",
+              rate: "",
+            },
+          ],
         })),
       );
     } catch (error) {
@@ -532,13 +579,17 @@ const AttendanceTab = () => {
   };
 
   const openEditModal = (record) => {
+    const isSplit = record.segments && record.segments.length > 0;
+
     setEditingRecord(record);
 
     const dateStr = new Date(record.date).toISOString().split("T")[0];
 
     const toTimeInput = (iso) => {
       const d = new Date(iso);
-      return d.toISOString().substring(11, 16); // HH:MM
+      const hh = d.getHours().toString().padStart(2, "0");
+      const mm = d.getMinutes().toString().padStart(2, "0");
+      return `${hh}:${mm}`;
     };
 
     setEditForm({
@@ -551,6 +602,15 @@ const AttendanceTab = () => {
       missingMinutes: record.missingMinutes || 0,
       note: record.note || "",
       remarks: record.remarks || "",
+      segments: record.segments.map((s) => ({
+        mode: s.mode || (s.startTime && s.endTime ? "time" : "hours"),
+        startTime: s.startTime ? toTimeInput(s.startTime) : "",
+        endTime: s.endTime ? toTimeInput(s.endTime) : "",
+        hoursWorked: s.mode === "hours" ? s.hoursWorked : "",
+        rate: s.rate ?? "",
+      })),
+
+      isSplit,
       _dateStr: dateStr,
     });
 
@@ -577,7 +637,17 @@ const AttendanceTab = () => {
       remarks: editForm.remarks,
     };
 
-    if (editForm.status === "present") {
+    if (editForm.isSplit) {
+      payload.segments = editForm.segments.map((s) => ({
+        mode: s.mode,
+        startTime: s.mode === "time" ? `${dateStr}T${s.startTime}` : null,
+        endTime: s.mode === "time" ? `${dateStr}T${s.endTime}` : null,
+        hoursWorked: s.mode === "hours" ? s.hoursWorked : undefined,
+        rate: s.rate,
+      }));
+    }
+
+    if (editForm.status === "present" && !editForm.isSplit) {
       payload.rate = editForm.rate;
       payload.restMinutes = editForm.restMinutes;
       payload.missingMinutes = editForm.missingMinutes;
@@ -854,203 +924,275 @@ const AttendanceTab = () => {
                     </div>
 
                     {w.attendanceStatus === "present" && (
-                      <>
-                        {/* Always visible */}
+                      <div
+                        className="mt-2 space-y-4"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {/* MODE SWITCH */}
+                        <div className="flex items-center gap-6 text-xs font-semibold">
+                          <label className="flex items-center gap-1">
+                            <input
+                              type="radio"
+                              checked={!w.multiMode}
+                              onChange={() =>
+                                updateWorker(w._id, "multiMode", false)
+                              }
+                            />
+                            Single Rate
+                          </label>
+
+                          <label className="flex items-center gap-1">
+                            <input
+                              type="radio"
+                              checked={w.multiMode}
+                              onChange={() =>
+                                updateWorker(w._id, "multiMode", true)
+                              }
+                            />
+                            Half-time Split
+                          </label>
+                        </div>
+
+                        {/* SINGLE RATE MODE */}
+                        {!w.multiMode && (
+                          <>
+                            <div className="grid grid-cols-2 gap-3">
+                              <div>
+                                <label className="field-label">Start</label>
+                                <input
+                                  type="time"
+                                  value={w.startTime || ""}
+                                  onChange={(e) =>
+                                    updateWorker(
+                                      w._id,
+                                      "startTime",
+                                      e.target.value,
+                                    )
+                                  }
+                                  className="field-input"
+                                />
+                              </div>
+
+                              <div>
+                                <label className="field-label">End</label>
+                                <input
+                                  type="time"
+                                  value={w.endTime || ""}
+                                  onChange={(e) =>
+                                    updateWorker(
+                                      w._id,
+                                      "endTime",
+                                      e.target.value,
+                                    )
+                                  }
+                                  className="field-input"
+                                />
+                              </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-3">
+                              <div>
+                                <label className="field-label">Rate (₹)</label>
+                                <input
+                                  type="number"
+                                  value={w.rate || ""}
+                                  onChange={(e) =>
+                                    updateWorker(
+                                      w._id,
+                                      "rate",
+                                      Number(e.target.value),
+                                    )
+                                  }
+                                  className="field-input"
+                                />
+                              </div>
+
+                              <div>
+                                <label className="field-label">
+                                  Hours Worked
+                                </label>
+                                <input
+                                  type="number"
+                                  step="0.5"
+                                  value={w.hoursWorked || ""}
+                                  onChange={(e) =>
+                                    updateWorker(
+                                      w._id,
+                                      "hoursWorked",
+                                      Number(e.target.value),
+                                    )
+                                  }
+                                  className="field-input"
+                                />
+                              </div>
+                            </div>
+                          </>
+                        )}
+
+                        {/* HALF TIME MODE */}
+                        {w.multiMode && (
+                          <div className="space-y-3">
+                            {w.segments.map((seg, i) => (
+                              <div
+                                key={i}
+                                className="border border-gray-300 rounded-xl p-3 bg-gray-50 relative"
+                              >
+                                {/* ❌ Remove segment */}
+                                {w.segments.length > 1 && (
+                                  <button
+                                    type="button"
+                                    className="absolute top-2 right-2 text-gray-400 hover:text-red-500"
+                                    onClick={() => {
+                                      const updated = w.segments.filter(
+                                        (_, idx) => idx !== i,
+                                      );
+                                      updateWorker(w._id, "segments", updated);
+                                    }}
+                                  >
+                                    <X size={14} />
+                                  </button>
+                                )}
+
+                                <p className="text-xs font-semibold mb-2">
+                                  Part {i + 1}
+                                </p>
+
+                                {/* Start + End */}
+                                <div className="grid grid-cols-2 gap-2">
+                                  <input
+                                    type="time"
+                                    value={seg.startTime || ""}
+                                    onChange={(e) => {
+                                      const updated = [...w.segments];
+                                      updated[i].startTime = e.target.value;
+                                      updated[i].hoursWorked = "";
+                                      updateWorker(w._id, "segments", updated);
+                                    }}
+                                    className="field-input"
+                                  />
+                                  <input
+                                    type="time"
+                                    value={seg.endTime || ""}
+                                    onChange={(e) => {
+                                      const updated = [...w.segments];
+                                      updated[i].endTime = e.target.value;
+                                      updated[i].hoursWorked = "";
+                                      updateWorker(w._id, "segments", updated);
+                                    }}
+                                    className="field-input"
+                                  />
+                                </div>
+
+                                {/* OR */}
+                                <p className="text-center text-[10px] text-gray-400 my-1">
+                                  OR
+                                </p>
+
+                                {/* Hours */}
+                                <input
+                                  type="number"
+                                  step="0.5"
+                                  placeholder="Hours"
+                                  value={seg.hoursWorked}
+                                  onChange={(e) => {
+                                    const updated = [...w.segments];
+                                    updated[i].hoursWorked = Number(
+                                      e.target.value,
+                                    );
+                                    updated[i].startTime = "";
+                                    updated[i].endTime = "";
+                                    updateWorker(w._id, "segments", updated);
+                                  }}
+                                  className="field-input"
+                                />
+
+                                {/* Rate */}
+                                <input
+                                  type="number"
+                                  placeholder="Rate"
+                                  value={seg.rate}
+                                  onChange={(e) => {
+                                    const updated = [...w.segments];
+                                    updated[i].rate = Number(e.target.value);
+                                    updateWorker(w._id, "segments", updated);
+                                  }}
+                                  className="field-input mt-2"
+                                />
+                              </div>
+                            ))}
+
+                            <button
+                              className="text-xs text-blue-600"
+                              onClick={() =>
+                                updateWorker(w._id, "segments", [
+                                  ...w.segments,
+                                  {},
+                                ])
+                              }
+                            >
+                              + Add Segment
+                            </button>
+                          </div>
+                        )}
+
+                        {/* REST + MISSING */}
                         <div className="grid grid-cols-2 gap-3">
-                          <div
-                            className="flex flex-col space-y-1"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            <label className="text-[11px] font-medium text-gray-500 tracking-wide">
-                              Start
-                            </label>
+                          <div>
+                            <label className="field-label">Rest (mins)</label>
                             <input
-                              type="time"
-                              value={w.startTime || ""}
+                              type="number"
+                              value={w.restMinutes || 0}
                               onChange={(e) =>
-                                updateWorker(w._id, "startTime", e.target.value)
+                                updateWorker(
+                                  w._id,
+                                  "restMinutes",
+                                  Number(e.target.value),
+                                )
                               }
-                              className="border border-gray-200 rounded-xl px-3 py-2 text-sm 
-           max-w-[120px]
-           bg-white/80 backdrop-blur-sm
-           focus:outline-none 
-           focus:ring-2 focus:ring-[var(--primary)]/20 
-           focus:border-[var(--primary)] 
-           transition"
+                              className="field-input"
                             />
                           </div>
 
-                          <div
-                            className="flex flex-col space-y-1"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            <label className="text-[11px] font-medium text-gray-500 tracking-wide">
-                              End
+                          <div>
+                            <label className="field-label">
+                              Missing (mins)
                             </label>
                             <input
-                              type="time"
-                              value={w.endTime || ""}
+                              type="number"
+                              value={w.missingMinutes || 0}
                               onChange={(e) =>
-                                updateWorker(w._id, "endTime", e.target.value)
+                                updateWorker(
+                                  w._id,
+                                  "missingMinutes",
+                                  Number(e.target.value),
+                                )
                               }
-                              className="border border-gray-200 rounded-xl px-3 py-2 text-sm 
-           max-w-[120px]
-           bg-white/80 backdrop-blur-sm
-           focus:outline-none 
-           focus:ring-2 focus:ring-[var(--primary)]/20 
-           focus:border-[var(--primary)] 
-           transition"
+                              className="field-input"
                             />
                           </div>
                         </div>
 
-                        {/* EXPANDABLE ZONE */}
-                        <div
-                          className={`transition-[max-height,opacity] duration-300 ease-in-out
- overflow-hidden ${
-   isExpanded ? "max-h-[500px] opacity-100" : "max-h-0 opacity-0"
- }`}
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          {/* Rate */}
-                          <div className="flex flex-col space-y-1 mt-2">
-                            <label className="text-[11px] font-medium text-gray-500 tracking-wide">
-                              Rate (₹)
-                            </label>
-                            <input
-                              type="number"
-                              placeholder="Rate"
-                              min={0}
-                              value={w.rate || ""}
-                              onChange={(e) =>
-                                updateWorker(
-                                  w._id,
-                                  "rate",
-                                  Number(e.target.value),
-                                )
-                              }
-                              className="border border-gray-200 rounded-xl px-3 py-2 text-sm 
-           focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/20 
-           focus:border-[var(--primary)] transition"
-                            />
-                          </div>
-
-                          {/* Hours Worked (Direct input alternative) */}
-                          <div className="flex flex-col space-y-1 mt-2">
-                            <label className="text-[11px] font-medium text-gray-500 tracking-wide">
-                              Hours Worked
-                            </label>
-                            <input
-                              type="number"
-                              min="0"
-                              step="0.5"
-                              placeholder="Enter hours directly"
-                              value={w.hoursWorked ?? ""}
-                              onChange={(e) =>
-                                updateWorker(
-                                  w._id,
-                                  "hoursWorked",
-                                  Number(e.target.value),
-                                )
-                              }
-                              className="border border-gray-200 rounded-xl px-3 py-2 text-sm 
-           focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/20 
-           focus:border-[var(--primary)] transition"
-                            />
-                            <small className="text-[10px] text-gray-400">
-                              Leave blank if using start/end time
-                            </small>
-                          </div>
-
-                          {/* Rest & Missing */}
-                          <div className="grid grid-cols-2 gap-3 mt-2">
-                            <div className="flex flex-col space-y-1">
-                              <label className="text-[11px] font-medium text-gray-500 tracking-wide">
-                                Rest Mins
-                              </label>
-                              <input
-                                type="number"
-                                min={0}
-                                value={w.restMinutes || 0}
-                                onChange={(e) =>
-                                  updateWorker(
-                                    w._id,
-                                    "restMinutes",
-                                    Number(e.target.value),
-                                  )
-                                }
-                                className="border border-gray-200 rounded-xl px-3 py-2 text-sm 
-           focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/20 
-           focus:border-[var(--primary)] transition"
-                              />
-                            </div>
-
-                            <div className="flex flex-col space-y-1">
-                              <label className="text-[11px] font-medium text-gray-500 tracking-wide">
-                                Missing Mins
-                              </label>
-                              <input
-                                type="number"
-                                min={0}
-                                value={w.missingMinutes || 0}
-                                onChange={(e) =>
-                                  updateWorker(
-                                    w._id,
-                                    "missingMinutes",
-                                    Number(e.target.value),
-                                  )
-                                }
-                                className="border border-gray-200 rounded-xl px-3 py-2 text-sm 
-           focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/20 
-           focus:border-[var(--primary)] transition"
-                              />
-                            </div>
-                          </div>
-
-                          {/* Note */}
-                          <div className="flex flex-col space-y-1 mt-2">
-                            <label className="text-[11px] font-medium text-gray-500 tracking-wide">
-                              Note
-                            </label>
-                            <input
-                              type="text"
-                              placeholder="Notes (optional)"
-                              value={w.note || ""}
-                              onChange={(e) =>
-                                updateWorker(w._id, "note", e.target.value)
-                              }
-                              className="border border-gray-200 rounded-xl px-3 py-2 text-sm 
-           focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/20 
-           focus:border-[var(--primary)] transition"
-                            />
-                          </div>
-
-                          {/* Remarks */}
-                          <div className="flex flex-col space-y-1 mt-2">
-                            <label className="text-[11px] font-medium text-gray-500 tracking-wide">
-                              Remarks
-                            </label>
-                            <input
-                              type="text"
-                              placeholder="Remarks"
-                              value={w.remarks || ""}
-                              onChange={(e) =>
-                                updateWorker(w._id, "remarks", e.target.value)
-                              }
-                              className="border border-gray-200 rounded-xl px-3 py-2 text-sm 
-           focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/20 
-           focus:border-[var(--primary)] transition"
-                            />
-                          </div>
-
-                          {/* Summary */}
-                          <div className="mt-2 flex justify-between text-sm text-gray-500">
-                            <span>Hours: {hours}</span>
-                            <span>Total: ₹ {total}</span>
-                          </div>
+                        {/* NOTE */}
+                        <div>
+                          <label className="field-label">Note</label>
+                          <input
+                            type="text"
+                            value={w.note || ""}
+                            onChange={(e) =>
+                              updateWorker(w._id, "note", e.target.value)
+                            }
+                            className="field-input"
+                          />
                         </div>
-                      </>
+
+                        {/* SUMMARY */}
+                        <div className="flex justify-between text-sm font-medium text-gray-600">
+                          <span>Hours: {hours}</span>
+                          <span>Total: ₹ {total}</span>
+                        </div>
+                      </div>
                     )}
+
                     {w.attendanceStatus === "absent" && (
                       <div className="mt-3">
                         <label className="text-xs text-gray-500">
@@ -1062,7 +1204,7 @@ const AttendanceTab = () => {
                           onChange={(e) =>
                             updateWorker(w._id, "note", e.target.value)
                           }
-                          className="border rounded-xl px-3 py-2 text-sm w-full"
+                          className="border border-gray-200 focus:ring-[var(--primary)] rounded-xl px-3 py-2 text-sm w-full"
                           placeholder="Reason is required"
                         />
                       </div>
@@ -1425,6 +1567,9 @@ const AttendanceTab = () => {
                   >
                     <div className="mt-3 space-y-3">
                       {records.map((item) => {
+                        const isMulti =
+                          item.segments && item.segments.length > 0;
+
                         const name = item.workerId?.name || "Worker";
                         const initials = name
                           .split(" ")
@@ -1439,7 +1584,7 @@ const AttendanceTab = () => {
                         return (
                           <div
                             key={item._id}
-                            className="relative overflow-hidden rounded-xl bg-red-500"
+                            className="relative overflow-hidden rounded-xl"
                           >
                             {/* Delete background (only if unsettled) */}
                             {!isLocked && (
@@ -1457,7 +1602,10 @@ const AttendanceTab = () => {
                             <div
                               className={`${getCardStyle(
                                 item,
-                              )} p-3 flex items-start justify-between rounded-xl shadow-sm transition-transform duration-200 ease-out no-select relative history-attendance-card`}
+                              )} p-4 flex items-start justify-between rounded-2xl 
+  shadow-sm hover:shadow-md 
+  transition-all duration-200 
+  no-select relative history-attendance-card`}
                               style={{
                                 transform: `translateX(${offset}px)`,
                                 pointerEvents: isLocked ? "none" : "auto",
@@ -1490,29 +1638,54 @@ const AttendanceTab = () => {
                                   {initials}
                                 </div>
                                 <div className="flex flex-col">
-                                  <p
-                                    className={`font-medium text-sm leading-tight ${
-                                      item.isSettled
-                                        ? "text-gray-600"
-                                        : "text-gray-800"
-                                    }`}
-                                  >
-                                    {name}
-                                  </p>
-                                  <span
-                                    className={`text-[11px] font-medium ${
-                                      item.status === "present"
-                                        ? "text-green-600"
-                                        : item.status === "absent"
-                                          ? "text-red-600"
-                                          : "text-gray-500"
-                                    }`}
-                                  >
-                                    {item.status === "present" && "✔ Present"}
-                                    {item.status === "absent" && "❌ Absent"}
-                                    {item.status === "inactive" &&
-                                      "⛔ Inactive"}
-                                  </span>
+                                  <div className="flex items-center gap-2">
+                                    <p
+                                      className={`font-semibold text-sm ${
+                                        item.isSettled
+                                          ? "text-gray-600"
+                                          : "text-gray-800"
+                                      }`}
+                                    >
+                                      {name}
+                                    </p>
+
+                                    <span
+                                      className={`text-[10px] px-2 py-[2px] rounded-full font-semibold
+      ${
+        item.status === "present"
+          ? "bg-green-100 text-green-700"
+          : item.status === "absent"
+            ? "bg-red-100 text-red-600"
+            : "bg-gray-200 text-gray-600"
+      }`}
+                                    >
+                                      {item.status}
+                                    </span>
+                                  </div>
+
+                                  {item.status === "present" && isMulti && (
+                                    <div className="mt-2 border border-gray-200 rounded-lg overflow-hidden">
+                                      <div className="grid grid-cols-4 gap-10 text-[11px] font-semibold bg-gray-100 text-gray-600 px-2 py-1">
+                                        <span>Hours</span>
+                                        <span>Rate</span>
+                                        <span>Total</span>
+                                      </div>
+
+                                      {item.segments.map((s, i) => (
+                                        <div
+                                          key={i}
+                                          className="grid grid-cols-4 gap-10 text-[11px] px-2 py-1 border-t"
+                                        >
+                                          <span>{s.hoursWorked}h</span>
+                                          <span>₹{s.rate}</span>
+                                          <span className="font-medium">
+                                            ₹{s.total}
+                                          </span>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+
                                   {item.status === "absent" && item.note && (
                                     <p className="mt-1 text-[11px] text-gray-800 italic max-w-[220px]">
                                       Reason: {item.note}
@@ -1522,10 +1695,19 @@ const AttendanceTab = () => {
                               </div>
 
                               {/* Amount Right Side */}
-                              <span className="font-semibold text-sm whitespace-nowrap">
-                                {item.status === "present"
-                                  ? `${item.hoursWorked}h • ₹${item.total}`
-                                  : "—"}
+                              <span className="text-right">
+                                {item.status === "present" ? (
+                                  <div className="flex flex-col items-end">
+                                    <span className="text-sm font-bold text-gray-900">
+                                      ₹{item.total}
+                                    </span>
+                                    <span className="text-[11px] text-gray-500">
+                                      {item.hoursWorked} hrs
+                                    </span>
+                                  </div>
+                                ) : (
+                                  "—"
+                                )}
                               </span>
                             </div>
                           </div>
@@ -1541,8 +1723,11 @@ const AttendanceTab = () => {
       {/* EDIT MODAL */}
       {editModalOpen && (
         <div className="fixed inset-0 backdrop-blur-sm bg-black/40 flex items-center justify-center z-50">
-          <div className="bg-white rounded-2xl shadow-xl w-[90%] max-w-md p-5 animate-scaleIn space-y-3">
-            <div className="flex justify-between items-center mb-1">
+          <div
+            className="bg-white rounded-2xl shadow-xl w-[90%] max-w-md 
+     max-h-[85vh] flex flex-col animate-scaleIn"
+          >
+            <div className="flex justify-between items-center px-5 py-4">
               <h2 className="font-semibold text-gray-800 text-base">
                 Edit Attendance
               </h2>
@@ -1550,132 +1735,330 @@ const AttendanceTab = () => {
                 <X className="w-4 h-4 text-gray-500" />
               </button>
             </div>
-            {/* Status Switch */}
-            <div className="flex items-center justify-between bg-gray-100 rounded-xl p-2">
-              <span className="text-sm font-medium text-gray-700">
-                Attendance Status
-              </span>
 
-              <select
-                value={editForm.status}
-                onChange={(e) => handleEditChange("status", e.target.value)}
-                disabled={editingRecord?.status === "inactive"}
-                className="border rounded-lg px-3 py-1 text-sm focus:outline-none"
-              >
-                <option value="present">Present</option>
-                <option value="absent">Absent</option>
-              </select>
-            </div>
+            <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
+              {/* Status Switch */}
+              <div className="flex items-center justify-between bg-gray-100 rounded-xl p-2">
+                <span className="text-sm font-medium text-gray-700">
+                  Attendance Status
+                </span>
 
-            {editForm.status === "present" && (
-              <>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="flex flex-col gap-1">
-                    <label className="text-xs text-gray-600">Start Time</label>
-                    <input
-                      type="time"
-                      value={editForm.startTime}
-                      disabled={!!editForm.hoursWorked}
-                      onChange={(e) =>
-                        handleEditChange("startTime", e.target.value)
-                      }
-                    />
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    <label className="text-xs text-gray-600">End Time</label>
-                    <input
-                      type="time"
-                      value={editForm.endTime}
-                      disabled={!!editForm.hoursWorked}
-                      onChange={(e) =>
-                        handleEditChange("endTime", e.target.value)
-                      }
-                    />
-                  </div>
-                </div>
-                {/* Hours Worked (Direct Input) */}
-                <div className="flex flex-col gap-1">
-                  <label className="text-xs text-gray-600">Hours Worked</label>
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.5"
-                    placeholder="Enter hours directly"
-                    value={editForm.hoursWorked}
-                    onChange={(e) =>
-                      handleEditChange(
-                        "hoursWorked",
-                        e.target.value === "" ? "" : Number(e.target.value),
-                      )
+                <select
+                  value={editForm.status}
+                  onChange={(e) => {
+                    const newStatus = e.target.value;
+
+                    if (newStatus === "present") {
+                      setEditForm((prev) => ({
+                        ...prev,
+                        status: "present",
+                        startTime: prev.startTime || "09:00",
+                        endTime: prev.endTime || "17:00",
+                        rate: prev.rate || "",
+                        hoursWorked: prev.hoursWorked || "",
+                        restMinutes: prev.restMinutes || 0,
+                        missingMinutes: prev.missingMinutes || 0,
+                        isSplit: prev.segments && prev.segments.length > 0,
+                      }));
+                    } else {
+                      setEditForm((prev) => ({
+                        ...prev,
+                        status: "absent",
+                      }));
                     }
-                    className="border rounded-md p-2 text-sm focus:outline-none focus:border-[var(--primary)]"
-                  />
-                  <span className="text-[10px] text-gray-400">
-                    Leave blank if using start & end time
-                  </span>
-                </div>
-
-                <div className="flex flex-col gap-1">
-                  <label className="text-xs text-gray-600">Rate (₹)</label>
-                  <input
-                    type="number"
-                    min="0"
-                    value={editForm.rate}
-                    onChange={(e) =>
-                      handleEditChange("rate", Number(e.target.value))
-                    }
-                    className="border rounded-md p-2 text-sm focus:outline-none focus:border-[var(--primary)]"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="flex flex-col gap-1">
-                    <label className="text-xs text-gray-600">Rest (mins)</label>
-                    <input
-                      type="number"
-                      min="0"
-                      value={editForm.restMinutes}
-                      onChange={(e) =>
-                        handleEditChange("restMinutes", Number(e.target.value))
-                      }
-                      className="border rounded-md p-2 text-sm focus:outline-none focus:border-[var(--primary)]"
-                    />
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    <label className="text-xs text-gray-600">
-                      Missing (mins)
-                    </label>
-                    <input
-                      type="number"
-                      min="0"
-                      value={editForm.missingMinutes}
-                      onChange={(e) =>
-                        handleEditChange(
-                          "missingMinutes",
-                          Number(e.target.value),
-                        )
-                      }
-                      className="border rounded-md p-2 text-sm focus:outline-none focus:border-[var(--primary)]"
-                    />
-                  </div>
-                </div>
-              </>
-            )}
-
-            {editForm.status === "absent" && (
-              <div className="flex flex-col gap-1">
-                <label className="text-xs text-gray-600">
-                  Reason for absence *
-                </label>
-                <input
-                  type="text"
-                  value={editForm.note}
-                  onChange={(e) => handleEditChange("note", e.target.value)}
-                  className="border rounded-md p-2 text-sm focus:outline-none focus:border-[var(--primary)]"
-                  placeholder="Reason is required"
-                />
+                  }}
+                  disabled={editingRecord?.status === "inactive"}
+                  className="border rounded-lg px-3 py-1 text-sm focus:outline-none"
+                >
+                  <option value="present">Present</option>
+                  <option value="absent">Absent</option>
+                </select>
               </div>
-            )}
+
+              {editForm.status === "present" && (
+                <>
+                  {/* SPLIT MODE */}
+                  {editForm.isSplit ? (
+                    <div className="space-y-3">
+                      {editForm.segments.map((seg, i) => (
+                        <div
+                          key={i}
+                          className="border border-gray-200 rounded-xl p-3 bg-gray-50 relative"
+                        >
+                          {/* DELETE SEGMENT */}
+                          {editForm.segments.length > 1 && (
+                            <button
+                              type="button"
+                              className="absolute top-2 right-2 text-gray-400 hover:text-red-500"
+                              onClick={() => {
+                                setEditForm((prev) => {
+                                  const updated = prev.segments.filter(
+                                    (_, idx) => idx !== i,
+                                  );
+
+                                  return {
+                                    ...prev,
+                                    segments: updated,
+                                    isSplit: updated.length > 0,
+                                  };
+                                });
+                              }}
+                            >
+                              <X size={14} />
+                            </button>
+                          )}
+
+                          <p className="text-xs font-semibold mb-2">
+                            Part {i + 1}
+                          </p>
+                          <div className="flex gap-3 text-[11px] font-semibold mb-1">
+                            <button
+                              type="button"
+                              className={
+                                seg.mode === "time"
+                                  ? "text-blue-600"
+                                  : "text-gray-400"
+                              }
+                              onClick={() => {
+                                const updated = [...editForm.segments];
+                                updated[i] = {
+                                  ...updated[i],
+                                  mode: "time",
+                                  hoursWorked: "",
+                                };
+                                setEditForm((p) => ({
+                                  ...p,
+                                  segments: updated,
+                                }));
+                              }}
+                            >
+                              Time
+                            </button>
+
+                            <button
+                              type="button"
+                              className={
+                                seg.mode === "hours"
+                                  ? "text-blue-600"
+                                  : "text-gray-400"
+                              }
+                              onClick={() => {
+                                const updated = [...editForm.segments];
+                                updated[i] = {
+                                  ...updated[i],
+                                  mode: "hours",
+                                  startTime: "",
+                                  endTime: "",
+                                };
+                                setEditForm((p) => ({
+                                  ...p,
+                                  segments: updated,
+                                }));
+                              }}
+                            >
+                              Hours
+                            </button>
+                          </div>
+
+                          {/* Start / End */}
+                          {/* TIME MODE */}
+                          {seg.mode === "time" && (
+                            <div className="grid grid-cols-2 gap-2">
+                              <input
+                                type="time"
+                                value={seg.startTime}
+                                onChange={(e) => {
+                                  const updated = [...editForm.segments];
+                                  updated[i].startTime = e.target.value;
+                                  setEditForm((p) => ({
+                                    ...p,
+                                    segments: updated,
+                                  }));
+                                }}
+                                className="field-input"
+                              />
+                              <input
+                                type="time"
+                                value={seg.endTime}
+                                onChange={(e) => {
+                                  const updated = [...editForm.segments];
+                                  updated[i].endTime = e.target.value;
+                                  setEditForm((p) => ({
+                                    ...p,
+                                    segments: updated,
+                                  }));
+                                }}
+                                className="field-input"
+                              />
+                            </div>
+                          )}
+
+                          {/* HOURS MODE */}
+                          {seg.mode === "hours" && (
+                            <input
+                              type="number"
+                              step="0.5"
+                              placeholder="Hours"
+                              value={seg.hoursWorked}
+                              onChange={(e) => {
+                                const updated = [...editForm.segments];
+                                updated[i].hoursWorked = Number(e.target.value);
+                                setEditForm((p) => ({
+                                  ...p,
+                                  segments: updated,
+                                }));
+                              }}
+                              className="field-input"
+                            />
+                          )}
+
+                          <input
+                            type="number"
+                            placeholder="Rate"
+                            value={seg.rate}
+                            onChange={(e) => {
+                              const updated = [...editForm.segments];
+                              updated[i].rate = Number(e.target.value);
+                              setEditForm((p) => ({ ...p, segments: updated }));
+                            }}
+                            className="field-input mt-2"
+                          />
+                        </div>
+                      ))}
+
+                      <button
+                        type="button"
+                        className="text-xs text-blue-600"
+                        onClick={() =>
+                          setEditForm((p) => ({
+                            ...p,
+                            segments: [...p.segments, {}],
+                          }))
+                        }
+                      >
+                        + Add Segment
+                      </button>
+                    </div>
+                  ) : (
+                    /* SINGLE MODE (UNCHANGED) */
+                    <div className="space-y-3">
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="text-xs text-gray-600">Start</label>
+                          <input
+                            type="time"
+                            value={editForm.startTime}
+                            disabled={!!editForm.hoursWorked}
+                            onChange={(e) =>
+                              handleEditChange("startTime", e.target.value)
+                            }
+                            className="field-input"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="text-xs text-gray-600">End</label>
+                          <input
+                            type="time"
+                            value={editForm.endTime}
+                            disabled={!!editForm.hoursWorked}
+                            onChange={(e) =>
+                              handleEditChange("endTime", e.target.value)
+                            }
+                            className="field-input"
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="text-xs text-gray-600">
+                          Hours (optional)
+                        </label>
+                        <input
+                          type="number"
+                          step="0.5"
+                          value={editForm.hoursWorked}
+                          onChange={(e) =>
+                            handleEditChange(
+                              "hoursWorked",
+                              e.target.value === ""
+                                ? ""
+                                : Number(e.target.value),
+                            )
+                          }
+                          className="field-input"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-xs text-gray-600">
+                          Rate (₹)
+                        </label>
+                        <input
+                          type="number"
+                          value={editForm.rate}
+                          onChange={(e) =>
+                            handleEditChange("rate", Number(e.target.value))
+                          }
+                          className="field-input"
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="text-xs text-gray-600">
+                            Rest (mins)
+                          </label>
+                          <input
+                            type="number"
+                            value={editForm.restMinutes}
+                            onChange={(e) =>
+                              handleEditChange(
+                                "restMinutes",
+                                Number(e.target.value),
+                              )
+                            }
+                            className="field-input"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="text-xs text-gray-600">
+                            Missing (mins)
+                          </label>
+                          <input
+                            type="number"
+                            value={editForm.missingMinutes}
+                            onChange={(e) =>
+                              handleEditChange(
+                                "missingMinutes",
+                                Number(e.target.value),
+                              )
+                            }
+                            className="field-input"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {editForm.status === "absent" && (
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs text-gray-600">
+                    Reason for absence *
+                  </label>
+                  <input
+                    type="text"
+                    value={editForm.note}
+                    onChange={(e) => handleEditChange("note", e.target.value)}
+                    className="border rounded-md p-2 text-sm focus:outline-none focus:border-[var(--primary)]"
+                    placeholder="Reason is required"
+                  />
+                </div>
+              )}
+            </div>
 
             {/* <div className="flex flex-col gap-1">
               <label className="text-xs text-gray-600">Remarks</label>
@@ -1687,19 +2070,22 @@ const AttendanceTab = () => {
               />
             </div> */}
 
-            <button
-              onClick={handleUpdateAttendance}
-              disabled={updateLoading}
-              className={`primary-bg text-white px-4 py-2 rounded w-full flex items-center justify-center gap-2 transition ${
-                updateLoading ? "opacity-70 cursor-not-allowed" : ""
-              }`}
-            >
-              {updateLoading ? (
-                <Loader className="animate-spin" size={18} />
-              ) : (
-                "Save"
-              )}
-            </button>
+            <div className="border-t border-gray-300 rounded-2xl px-5 py-4">
+              <button
+                onClick={handleUpdateAttendance}
+                disabled={updateLoading}
+                className={`primary-bg text-white px-4 py-2 rounded-xl w-full 
+      flex items-center justify-center gap-2 transition ${
+        updateLoading ? "opacity-70 cursor-not-allowed" : ""
+      }`}
+              >
+                {updateLoading ? (
+                  <Loader className="animate-spin" size={18} />
+                ) : (
+                  "Save"
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}

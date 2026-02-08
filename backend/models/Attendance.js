@@ -72,6 +72,16 @@ const AttendanceSchema = new mongoose.Schema(
       ref: "Settlement",
       default: null,
     },
+    segments: [
+      {
+        startTime: Date,
+        endTime: Date,
+        hoursWorked: Number,
+        rate: Number,
+        total: Number,
+        mode: { type: String, enum: ["time", "hours"] },
+      },
+    ],
   },
   { timestamps: true },
 );

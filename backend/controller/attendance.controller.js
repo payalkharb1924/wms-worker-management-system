@@ -20,7 +20,7 @@ export const createAttendance = async (req, res) => {
     const {
       workerId,
       date,
-      status, // present | absent | inactive
+      status,
       startTime,
       endTime,
       restMinutes = 0,
@@ -28,6 +28,7 @@ export const createAttendance = async (req, res) => {
       rate,
       note,
       remarks,
+      segments = [], // 👈 ADD THIS
     } = req.body;
 
     // basic validation
@@ -67,6 +68,62 @@ export const createAttendance = async (req, res) => {
     // =========================
     // STATUS-BASED LOGIC
     // =========================
+
+    if (status === "present" && segments.length) {
+      let totalHours = 0;
+      let totalAmount = 0;
+
+      const computed = segments.map((s) => {
+        let hrs = 0;
+
+        // CASE 1: Hours provided directly
+        if (s.hoursWorked && s.hoursWorked > 0) {
+          hrs = Number(s.hoursWorked);
+        }
+        // CASE 2: Start & End provided
+        else if (s.startTime && s.endTime) {
+          const start = new Date(s.startTime);
+          const end = new Date(s.endTime);
+
+          if (end <= start) {
+            throw new Error("Invalid segment time range");
+          }
+
+          hrs = Number(((end - start) / 3600000).toFixed(2));
+        } else {
+          throw new Error("Each segment needs hours or start/end time");
+        }
+
+        const amt = Number((hrs * s.rate).toFixed(2));
+
+        totalHours += hrs;
+        totalAmount += amt;
+
+        const isTimeBased = !!(s.startTime && s.endTime);
+
+        return {
+          startTime: s.startTime || null,
+          endTime: s.endTime || null,
+          hoursWorked: hrs,
+          rate: s.rate,
+          total: amt,
+          mode: isTimeBased ? "time" : "hours",
+        };
+      });
+
+      const attendance = await Attendance.create({
+        workerId,
+        date: attendanceDate,
+        status,
+        segments: computed,
+        hoursWorked: totalHours,
+        total: totalAmount,
+        note,
+        remarks,
+      });
+
+      return res.status(201).json(attendance);
+    }
 
     let hoursWorked = 0;
     let total = 0;
@@ -166,6 +223,7 @@ export const updateAttendance = async (req, res) => {
 
     const {
       status = attendance.status,
+      segments,
       startTime,
       endTime,
       restMinutes = attendance.restMinutes,
@@ -174,6 +232,66 @@ export const updateAttendance = async (req, res) => {
       note,
       remarks,
     } = req.body;
+
+    // 🟢 UPDATE SPLIT ATTENDANCE
+    if (status === "present" && segments?.length) {
+      let totalHours = 0;
+      let totalAmount = 0;
+
+      const computed = segments.map((s) => {
+        let hrs = 0;
+
+        if (s.hoursWorked && s.hoursWorked > 0) {
+          hrs = Number(s.hoursWorked);
+        } else if (s.startTime && s.endTime) {
+          const start = new Date(s.startTime);
+          const end = new Date(s.endTime);
+
+          if (end <= start) {
+            throw new Error("Invalid segment time range");
+          }
+
+          hrs = Number(((end - start) / 3600000).toFixed(2));
+        } else {
+          throw new Error("Segment requires hours or time range");
+        }
+
+        const amt = Number((hrs * s.rate).toFixed(2));
+
+        totalHours += hrs;
+        totalAmount += amt;
+
+        const isTimeBased = !!(s.startTime && s.endTime);
+
+        return {
+          startTime: s.startTime || null,
+          endTime: s.endTime || null,
+          hoursWorked: hrs,
+          rate: s.rate,
+          total: amt,
+          mode: isTimeBased ? "time" : "hours",
+        };
+      });
+
+      attendance.status = "present";
+      attendance.segments = computed;
+      attendance.hoursWorked = totalHours;
+      attendance.total = totalAmount;
+      attendance.note = note ?? attendance.note;
+      attendance.remarks = remarks ?? attendance.remarks;
+
+      await attendance.save();
+
+      const populated = await Attendance.findById(attendance._id).populate(
+        "workerId",
+        "name",
+      );
+
+      return res.json({
+        msg: "Attendance updated",
+        updatedAttendance: populated,
+      });
+    }
 
     let hoursWorked = 0;
     let total = 0;

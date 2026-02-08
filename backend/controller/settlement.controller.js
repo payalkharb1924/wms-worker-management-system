@@ -267,12 +267,27 @@ export const getWorkerLedger = async (req, res) => {
 
     // Attendance → YOU GOT (worker worked, you owe money)
     attendanceList.forEach((a) => {
-      const amount = a.total || 0;
+      // 🟢 Split attendance
+      if (a.segments && a.segments.length > 0) {
+        a.segments.forEach((s, idx) => {
+          entries.push({
+            _id: `${a._id}-${idx}`,
+            type: "attendance",
+            direction: "in",
+            amount: s.total,
+            label: `Part ${idx + 1}: ${s.hoursWorked} hr @ ₹${s.rate}`,
+            createdAt: a.date,
+          });
+        });
+        return;
+      }
+
+      // 🟡 Single attendance (fallback)
       entries.push({
         _id: a._id,
         type: "attendance",
-        direction: "in", // YOU GOT (work)
-        amount,
+        direction: "in",
+        amount: a.total || 0,
         label:
           a.note ||
           (a.hoursWorked ? `${a.hoursWorked} hr worked` : "Attendance added"),
@@ -522,18 +537,33 @@ export const getWorkerMonthWiseSummary = async (req, res) => {
     attendance.forEach((a) => {
       if (a.status === "inactive") return; // ⛔ ignore fully
 
-      entries.push({
-        date: a.date.toISOString().split("T")[0],
-        type: "attendance",
-        description:
-          a.status === "absent"
-            ? `Absent – ${a.note || "No reason"}`
-            : a.note || `${a.hoursWorked || 0} hours worked`,
-        debit: 0,
-        credit: a.status === "present" ? a.total || 0 : 0,
-        settled: a.isSettled || false,
-        rawDate: a.date,
-      });
+      if (a.segments && a.segments.length > 0) {
+        a.segments.forEach((s, idx) => {
+          entries.push({
+            date: a.date.toISOString().split("T")[0],
+            type: "attendance",
+            description: `Part ${idx + 1}: ${s.hoursWorked} hr @ ₹${s.rate}`,
+            debit: 0,
+            credit: s.total,
+            settled: a.isSettled || false,
+            rawDate: a.date,
+            hoursWorked: s.hoursWorked,
+            rate: s.rate,
+          });
+        });
+      } else {
+        entries.push({
+          date: a.date.toISOString().split("T")[0],
+          type: "attendance",
+          description: a.note || `${a.hoursWorked || 0} hours worked`,
+          debit: 0,
+          credit: a.total || 0,
+          settled: a.isSettled || false,
+          rawDate: a.date,
+          hoursWorked: a.hoursWorked || 0,
+          rate: a.rate || 0,
+        });
+      }
     });
 
     advances.forEach((adv) => {
@@ -578,12 +608,18 @@ export const getWorkerMonthWiseSummary = async (req, res) => {
     });
 
     // Calculate totals
-    const entriesForTotals = entries.filter((e) =>
-      !e.settled && e.type !== "attendance" ? true : e.credit > 0,
+    const entriesForTotals = entries.filter(
+      (e) => !e.settled && (e.credit > 0 || e.debit > 0),
     );
 
-    const totalCredits = entriesForTotals.reduce((s, e) => s + e.credit, 0);
-    const totalDebits = entriesForTotals.reduce((s, e) => s + e.debit, 0);
+    const totalCredits = entriesForTotals.reduce(
+      (s, e) => s + (e.credit || 0),
+      0,
+    );
+    const totalDebits = entriesForTotals.reduce(
+      (s, e) => s + (e.debit || 0),
+      0,
+    );
     const netPayable = totalCredits - totalDebits;
 
     return res.status(200).json({
@@ -728,22 +764,38 @@ export const generateMonthWisePDF = async (req, res) => {
     attendance.forEach((a) => {
       if (a.status === "inactive") return;
 
-      entries.push({
-        date: a.date.toISOString().split("T")[0],
-        type: "attendance",
-        description:
-          a.status === "absent"
-            ? `Absent – ${a.note || "No reason"}`
-            : a.note || `${a.hoursWorked || 0} hours worked`,
-        debit: 0,
-        credit: a.status === "present" ? a.total || 0 : 0,
-        settled: a.isSettled || false,
-        rawDate: a.date,
+      if (a.segments && a.segments.length > 0) {
+        a.segments.forEach((s, idx) => {
+          entries.push({
+            date: toDateOnly(a.date),
+            type: "attendance",
+            description: `Part ${idx + 1}: ${s.hoursWorked} hr @ ₹${s.rate}`,
+            debit: 0,
+            credit: s.total,
+            settled: a.isSettled || false,
+            rawDate: a.date,
 
-        // ✅ ADD THESE (CRITICAL)
-        hoursWorked: a.status === "present" ? a.hoursWorked || 0 : 0,
-        rate: a.status === "present" ? a.rate || 0 : 0,
-      });
+            hoursWorked: s.hoursWorked,
+            rate: s.rate,
+          });
+        });
+      } else {
+        entries.push({
+          date: toDateOnly(a.date),
+          type: "attendance",
+          description:
+            a.status === "absent"
+              ? `Absent – ${a.note || "No reason"}`
+              : a.note || `${a.hoursWorked || 0} hours worked`,
+          debit: 0,
+          credit: a.status === "present" ? a.total || 0 : 0,
+          settled: a.isSettled || false,
+          rawDate: a.date,
+
+          hoursWorked: a.status === "present" ? a.hoursWorked || 0 : 0,
+          rate: a.status === "present" ? a.rate || 0 : 0,
+        });
+      }
     });
 
     advances.forEach((adv) => {
