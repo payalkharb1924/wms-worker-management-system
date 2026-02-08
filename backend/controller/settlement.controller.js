@@ -105,71 +105,67 @@ export const getWorkerPendingSummary = async (req, res) => {
 export const createSettlementForWorker = async (req, res) => {
   try {
     const { workerId } = req.params;
-    const { startDate, endDate, note } = req.body;
+    const { startDate, endDate, note, payMode, paidNow = null } = req.body;
+    if (payMode === "partial") {
+      if (paidNow <= 0) {
+        return res.status(400).json({ msg: "Invalid paid amount" });
+      }
+
+      if (paidNow > netAmount) {
+        return res
+          .status(400)
+          .json({ msg: "Paid amount exceeds pending amount" });
+      }
+    }
 
     const worker = await Worker.findById(workerId);
     if (!worker) return res.status(404).json({ msg: "Worker not found" });
 
-    if (worker.farmerId.toString() !== req.user.id) {
-      return res.status(403).json({ msg: "Not authorized" });
-    }
-
-    // Fetch ALL unsettled entries
+    // 🔹 fetch ALL unsettled entries
     const [attendance, advances, extras] = await Promise.all([
-      Attendance.find({ workerId, isSettled: false }).lean(),
-      Advance.find({ workerId, isSettled: false }).lean(),
-      Extra.find({ workerId, isSettled: false }).lean(),
+      Attendance.find({ workerId, isSettled: false }),
+      Advance.find({ workerId, isSettled: false }),
+      Extra.find({ workerId, isSettled: false }),
     ]);
 
     if (!attendance.length && !advances.length && !extras.length) {
-      return res.status(400).json({ msg: "No pending entries to settle" });
+      return res.status(400).json({ msg: "Nothing to settle" });
     }
 
-    // Date-only comparison (CRITICAL)
-    const pendingDates = [
-      ...attendance.map((a) => a.date),
-      ...advances.map((a) => a.date),
-      ...extras.map((e) => e.date),
-    ]
-      .filter(Boolean)
-      .map((d) => d.toISOString().split("T")[0]);
-
-    const earliest = pendingDates.reduce((a, b) => (a < b ? a : b));
-    const latest = pendingDates.reduce((a, b) => (a > b ? a : b));
-
-    if (startDate !== earliest) {
-      return res.status(400).json({
-        msg: `Settlement must start from ${earliest}`,
-      });
-    }
-
-    if (endDate !== latest) {
-      return res.status(400).json({
-        msg: `Settlement must end on ${latest}`,
-      });
-    }
-
-    // Amounts
     const attendanceTotal = attendance.reduce((s, a) => s + (a.total || 0), 0);
     const advancesTotal = advances.reduce((s, a) => s + (a.amount || 0), 0);
     const extrasTotal = extras.reduce((s, e) => s + (e.price || 0), 0);
 
     const netAmount = attendanceTotal - advancesTotal - extrasTotal;
 
-    // Persist settlement
+    // ✅ NEW LOGIC
+    const paidAmount =
+      paidNow === null ? netAmount : Math.min(paidNow, netAmount);
+
+    const walletDeposit = netAmount - paidAmount;
+
+    // 💰 update wallet
+    if (walletDeposit > 0) {
+      worker.walletBalance += walletDeposit;
+      await worker.save();
+    }
+
+    // create settlement
     const settlement = await Settlement.create({
       workerId,
       farmerId: req.user.id,
-      startDate: new Date(`${startDate}T00:00:00.000Z`),
-      endDate: new Date(`${endDate}T23:59:59.999Z`),
+      startDate,
+      endDate,
       attendanceTotal,
       advancesTotal,
       extrasTotal,
       netAmount,
-      note: note || "",
+      paidAmount,
+      walletDeposit,
+      note,
     });
 
-    // Mark all as settled
+    // ✅ IMPORTANT: mark ALL entries settled
     await Promise.all([
       Attendance.updateMany(
         { _id: { $in: attendance.map((a) => a._id) } },
@@ -185,10 +181,15 @@ export const createSettlementForWorker = async (req, res) => {
       ),
     ]);
 
-    return res.status(201).json({ msg: "Settlement created successfully" });
+    return res.status(201).json({
+      msg: "Settlement completed",
+      paidAmount,
+      walletDeposit,
+      walletBalance: worker.walletBalance,
+    });
   } catch (err) {
-    console.error("createSettlementForWorker error:", err);
-    return res.status(500).json({ msg: "Error in creating settlement" });
+    console.error(err);
+    return res.status(500).json({ msg: "Settlement failed" });
   }
 };
 
@@ -325,18 +326,41 @@ export const getWorkerLedger = async (req, res) => {
 
     // Settlements → usually YOU GAVE (paying dues)
     settlementsList.forEach((st) => {
-      let amt = st.netAmount || 0;
-      const isOut = amt >= 0; // positive = you paid worker; negative = worker gave you
-      amt = Math.abs(amt);
+      // cash paid
+      if (st.paidAmount > 0) {
+        entries.push({
+          _id: st._id + "-paid",
+          type: "settlement",
+          direction: "out",
+          amount: st.paidAmount,
+          label: st.note || "Settlement paid",
+          createdAt: st.createdAt,
+        });
+      }
 
-      entries.push({
-        _id: st._id,
-        type: "settlement",
-        direction: isOut ? "out" : "in",
-        amount: amt,
-        label: st.note || "Settlement",
-        createdAt: st.createdAt || st.endDate || st.startDate,
-      });
+      // wallet deposit
+      if (st.walletDeposit > 0) {
+        entries.push({
+          _id: st._id + "-wallet",
+          type: "wallet",
+          direction: "out",
+          amount: st.walletDeposit,
+          label: "Amount kept in wallet",
+          createdAt: st.createdAt,
+        });
+      }
+
+      // wallet withdraw
+      if (st.walletDeposit < 0) {
+        entries.push({
+          _id: st._id + "-withdraw",
+          type: "wallet",
+          direction: "out",
+          amount: Math.abs(st.walletDeposit),
+          label: "Paid from wallet",
+          createdAt: st.createdAt,
+        });
+      }
     });
 
     // Sort newest first
@@ -365,7 +389,8 @@ export const getWorkerLedger = async (req, res) => {
 export const createMonthWiseSettlement = async (req, res) => {
   try {
     const { workerId } = req.params;
-    const { startDate, endDate, includeTillToday, note } = req.body;
+    const { startDate, endDate, includeTillToday, note, payMode, paidNow } =
+      req.body;
 
     const worker = await Worker.findById(workerId);
     if (!worker) return res.status(404).json({ msg: "Worker not found" });
@@ -433,6 +458,26 @@ export const createMonthWiseSettlement = async (req, res) => {
     const extrasTotal = extras.reduce((s, e) => s + (e.price || 0), 0);
     const netAmount = attendanceTotal - advancesTotal - extrasTotal;
 
+    let paidAmount = netAmount;
+    let walletDeposit = 0;
+
+    if (payMode === "partial") {
+      if (!paidNow || paidNow <= 0) {
+        return res.status(400).json({ msg: "Invalid paid amount" });
+      }
+
+      if (paidNow > netAmount) {
+        return res.status(400).json({ msg: "Paid amount exceeds net amount" });
+      }
+
+      paidAmount = paidNow;
+      walletDeposit = netAmount - paidNow;
+
+      // 💰 UPDATE WORKER WALLET
+      worker.walletBalance += walletDeposit;
+      await worker.save();
+    }
+
     // Create settlement
     const settlement = await Settlement.create({
       workerId,
@@ -443,6 +488,8 @@ export const createMonthWiseSettlement = async (req, res) => {
       advancesTotal,
       extrasTotal,
       netAmount,
+      paidAmount,
+      walletDeposit,
       note: note || `Month-wise settlement: ${startDate} to ${endDate}`,
     });
 
@@ -1000,6 +1047,27 @@ export const generateMonthWisePDF = async (req, res) => {
       .fontSize(16)
       .font("NotoSans")
       .text(`₹ ${netPayable}`, badgeX + 12, badgeY + 20);
+
+    doc.fillColor("black");
+
+    // WALLET SUMMARY
+    const walletY = badgeY + badgeHeight + 10;
+
+    doc
+      .roundedRect(badgeX, walletY, badgeWidth, 42, 8)
+      .fillAndStroke("#eff6ff", "#3b82f6");
+
+    doc
+      .fillColor("#1e40af")
+      .fontSize(10)
+      .text("WALLET MOVEMENT", badgeX + 12, walletY + 8);
+
+    const walletNet = settlementsList.reduce(
+      (s, st) => s + (st.walletDeposit || 0),
+      0,
+    );
+
+    doc.fontSize(14).text(`₹ ${walletNet}`, badgeX + 12, walletY + 20);
 
     doc.fillColor("black");
 

@@ -77,13 +77,15 @@ export const createAttendance = async (req, res) => {
         let hrs = 0;
 
         // CASE 1: Hours provided directly
-        if (s.hoursWorked && s.hoursWorked > 0) {
+        if (Number(s.hoursWorked) > 0) {
           hrs = Number(s.hoursWorked);
-        }
-        // CASE 2: Start & End provided
-        else if (s.startTime && s.endTime) {
+        } else if (s.startTime && s.endTime) {
           const start = new Date(s.startTime);
           const end = new Date(s.endTime);
+
+          if (isNaN(start) || isNaN(end)) {
+            throw new Error("Invalid segment datetime");
+          }
 
           if (end <= start) {
             throw new Error("Invalid segment time range");
@@ -241,11 +243,15 @@ export const updateAttendance = async (req, res) => {
       const computed = segments.map((s) => {
         let hrs = 0;
 
-        if (s.hoursWorked && s.hoursWorked > 0) {
+        if (Number(s.hoursWorked) > 0) {
           hrs = Number(s.hoursWorked);
         } else if (s.startTime && s.endTime) {
           const start = new Date(s.startTime);
           const end = new Date(s.endTime);
+
+          if (isNaN(start) || isNaN(end)) {
+            throw new Error("Invalid segment datetime");
+          }
 
           if (end <= start) {
             throw new Error("Invalid segment time range");
@@ -253,7 +259,7 @@ export const updateAttendance = async (req, res) => {
 
           hrs = Number(((end - start) / 3600000).toFixed(2));
         } else {
-          throw new Error("Segment requires hours or time range");
+          throw new Error("Each segment needs hours or start/end time");
         }
 
         const amt = Number((hrs * s.rate).toFixed(2));

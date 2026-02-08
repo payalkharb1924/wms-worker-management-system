@@ -12,6 +12,7 @@ import {
   createMonthWiseSettlement,
   generateMonthWisePDF,
 } from "../controller/settlement.controller.js";
+import { withdrawFromWallet } from "../controller/wallet.controller.js";
 
 const router = express.Router();
 
@@ -19,14 +20,14 @@ const router = express.Router();
 router.get(
   "/worker/:workerId/pending",
   authMiddleware,
-  getWorkerPendingSummary
+  getWorkerPendingSummary,
 );
 
 // Create a settlement (used by "Settle Payment" popup)
 router.post(
   "/worker/:workerId/settle",
   authMiddleware,
-  createSettlementForWorker
+  createSettlementForWorker,
 );
 
 // History for one worker
@@ -41,22 +42,28 @@ router.get("/worker/:workerId/ledger", authMiddleware, getWorkerLedger);
 router.get(
   "/worker/:workerId/last-settlement",
   authMiddleware,
-  getWorkerLastSettlement
+  getWorkerLastSettlement,
 );
 router.get(
   "/worker/:workerId/month-wise-summary",
   authMiddleware,
-  getWorkerMonthWiseSummary
+  getWorkerMonthWiseSummary,
 );
 router.post(
   "/worker/:workerId/month-wise-settle",
   authMiddleware,
-  createMonthWiseSettlement
+  createMonthWiseSettlement,
 );
 router.get(
   "/worker/:workerId/month-wise-pdf",
   authMiddleware,
-  generateMonthWisePDF
+  generateMonthWisePDF,
+);
+
+router.post(
+  "/worker/:workerId/wallet-withdraw",
+  authMiddleware,
+  withdrawFromWallet,
 );
 
 export default router;

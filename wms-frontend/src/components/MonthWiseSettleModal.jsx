@@ -26,6 +26,13 @@ const MonthWiseSettleModal = ({
   const [settling, setSettling] = useState(false);
   const [showConfirmPopup, setShowConfirmPopup] = useState(false);
   const [isViewMode, setIsViewMode] = useState(false);
+  const [payMode, setPayMode] = useState("full");
+  const [paidNow, setPaidNow] = useState(0);
+  useEffect(() => {
+    if (summary && payMode === "full") {
+      setPaidNow(summary.totals.netPayable);
+    }
+  }, [summary, payMode]);
 
   // Auto-calculate start date when modal opens (only in settlement mode)
   useEffect(() => {
@@ -159,6 +166,8 @@ const MonthWiseSettleModal = ({
         endDate,
         includeTillToday,
         note: `Month-wise settlement till ${endDate}`,
+        payMode,
+        paidNow: payMode === "partial" ? paidNow : null,
       });
 
       toast.success("Settlement completed successfully!");
@@ -621,7 +630,8 @@ const MonthWiseSettleModal = ({
             </p>
 
             {summary && (
-              <div className="bg-gray-50 p-3 rounded-lg">
+              <div className="bg-gray-50 p-3 rounded-lg space-y-3">
+                {/* Existing totals */}
                 <div className="text-sm space-y-1">
                   <div className="flex justify-between">
                     <span>Total Credits:</span>
@@ -629,18 +639,66 @@ const MonthWiseSettleModal = ({
                       ₹{summary.totals.totalCredits}
                     </span>
                   </div>
+
                   <div className="flex justify-between">
                     <span>Total Debits:</span>
                     <span className="text-red-600 font-semibold">
                       ₹{summary.totals.totalDebits}
                     </span>
                   </div>
+
                   <div className="flex justify-between border-t pt-1">
                     <span>Net Amount:</span>
                     <span className="font-bold">
                       ₹{summary.totals.netPayable}
                     </span>
                   </div>
+                </div>
+
+                {/* 🔥 ADD WALLET OPTION HERE */}
+                <div className="pt-2 border-t space-y-2">
+                  <label className="flex gap-2 items-center text-sm">
+                    <input
+                      type="radio"
+                      checked={payMode === "full"}
+                      onChange={() => {
+                        setPayMode("full");
+                        setPaidNow(summary.totals.netPayable);
+                      }}
+                    />
+                    Pay full amount
+                  </label>
+
+                  <label className="flex gap-2 items-center text-sm">
+                    <input
+                      type="radio"
+                      checked={payMode === "partial"}
+                      onChange={() => {
+                        setPayMode("partial");
+                        setPaidNow(0);
+                      }}
+                    />
+                    Pay partially & deposit rest in wallet
+                  </label>
+
+                  {payMode === "partial" && (
+                    <>
+                      <input
+                        type="number"
+                        min={0}
+                        max={summary.totals.netPayable}
+                        value={paidNow}
+                        onChange={(e) => setPaidNow(Number(e.target.value))}
+                        className="border rounded-lg p-2 w-full text-sm"
+                        placeholder="Pay now"
+                      />
+
+                      <p className="text-xs text-gray-500">
+                        Will be deposited to wallet: ₹
+                        {Math.max(summary.totals.netPayable - paidNow, 0)}
+                      </p>
+                    </>
+                  )}
                 </div>
               </div>
             )}

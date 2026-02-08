@@ -118,7 +118,14 @@ const AttendanceTab = () => {
             workerId: w._id,
             date: selectedDate,
             status: "present",
-            segments: w.segments,
+            segments: w.segments.map((s) => ({
+              rate: s.rate,
+              hoursWorked: s.hoursWorked || undefined,
+              startTime: s.startTime
+                ? `${selectedDate}T${s.startTime}`
+                : undefined,
+              endTime: s.endTime ? `${selectedDate}T${s.endTime}` : undefined,
+            })),
             note: w.note || "",
             remarks: w.remarks || "",
           };
@@ -222,11 +229,15 @@ const AttendanceTab = () => {
     try {
       setSaving(true);
       const invalidSegments = workers.some(
-        (w) => w.multiMode && w.segments.some((s) => !s.hoursWorked || !s.rate),
+        (w) =>
+          w.multiMode &&
+          w.segments.some(
+            (s) => !s.rate || (!s.hoursWorked && !(s.startTime && s.endTime)),
+          ),
       );
 
       if (invalidSegments) {
-        return toast.error("Fill hours and rate for all parts");
+        return toast.error("Fill hours/time and rate for all parts");
       }
 
       for (const entry of entries) {

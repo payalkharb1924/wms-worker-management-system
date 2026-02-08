@@ -40,6 +40,12 @@ const SettlementSchema = new mongoose.Schema(
       type: Number,
       required: true,
     },
+    paidAmount: {
+      type: Number,
+    },
+    walletDeposit: {
+      type: Number,
+    },
 
     // A: with note
     note: {
@@ -54,7 +60,7 @@ const SettlementSchema = new mongoose.Schema(
       required: true,
     },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 SettlementSchema.index({ farmerId: 1, createdAt: -1 });

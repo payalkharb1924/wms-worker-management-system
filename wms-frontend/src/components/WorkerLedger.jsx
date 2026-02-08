@@ -31,6 +31,12 @@ const chipByType = (type) => {
       return { label: "Extra", className: "bg-amber-50 text-amber-700" };
     case "settlement":
       return { label: "Settlement", className: "bg-sky-50 text-sky-700" };
+    case "wallet":
+      return {
+        label: "Wallet",
+        className: "bg-indigo-50 text-indigo-700",
+      };
+
     default:
       return { label: "Entry", className: "bg-gray-50 text-gray-600" };
   }
@@ -77,8 +83,8 @@ const WorkerLedger = ({
   const balanceLabel = isAllClear
     ? "All settled"
     : isFarmerWillGive
-    ? "You will give"
-    : "You will get";
+      ? "You will give"
+      : "You will get";
 
   const balanceAmount = Math.abs(netPending);
 
@@ -99,8 +105,8 @@ const WorkerLedger = ({
                 isAllClear
                   ? "text-gray-500"
                   : isFarmerWillGive
-                  ? "text-red-500"
-                  : "text-emerald-600"
+                    ? "text-red-500"
+                    : "text-emerald-600"
               }`}
             >
               ₹{balanceAmount.toFixed(2)}
@@ -109,15 +115,16 @@ const WorkerLedger = ({
         </div>
 
         <button
-          disabled={isAllClear || summaryLoading}
           onClick={onSettleClick}
-          className={`settle-worker-btn px-4 py-2 rounded-lg text-sm font-semibold shadow-sm ${
-            isAllClear || summaryLoading
-              ? "bg-gray-200 text-gray-500 cursor-not-allowed"
-              : "primary-bg text-white active:scale-95 transition"
+          className={`px-4 py-2 rounded-lg text-sm font-semibold ${
+            summaryLoading
+              ? "bg-gray-200 text-gray-400"
+              : isAllClear
+                ? "bg-blue-100 text-blue-700"
+                : "primary-bg text-white"
           }`}
         >
-          {isAllClear ? "Nothing to settle" : "Settle now"}
+          {isAllClear ? "View Only" : "Settle now"}
         </button>
       </div>
 
@@ -157,7 +164,13 @@ const WorkerLedger = ({
           return (
             <div
               key={entry._id}
-              className="bg-white rounded-xl border border-gray-200 shadow-sm px-3 py-2.5 mb-2 flex items-center justify-between"
+              className={`
+    rounded-xl px-4 py-3 mb-3 flex items-center justify-between
+    backdrop-blur-md bg-white/70
+    shadow-[0_8px_25px_rgba(0,0,0,0.08)]
+    border border-white/60
+    ${isOut ? "border-l-4 border-red-400" : "border-l-4 border-emerald-400"}
+  `}
             >
               <div className="flex flex-col gap-1">
                 <span className="text-[10px] text-gray-400">
