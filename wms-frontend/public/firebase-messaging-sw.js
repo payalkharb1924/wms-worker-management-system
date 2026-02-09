@@ -1,8 +1,8 @@
 importScripts(
-  "https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"
+  "https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js",
 );
 importScripts(
-  "https://www.gstatic.com/firebasejs/9.22.0/firebase-messaging-compat.js"
+  "https://www.gstatic.com/firebasejs/9.22.0/firebase-messaging-compat.js",
 );
 
 firebase.initializeApp({
@@ -17,23 +17,32 @@ const messaging = firebase.messaging();
 
 messaging.onBackgroundMessage((payload) => {
   console.log("[SW] Background message:", payload);
+  // Build notification content and show it explicitly so we can control the icon/badge.
+  // Prefer notification fields, then data fields, then fall back to app icons in /public.
+  const notification = payload.notification || {};
+  const data = payload.data || {};
 
-  // FCM handles the notification automatically, so don't show again to avoid duplicate
-  // const { title, body, icon, image } = payload.data || {};
-  // const finalTitle = title || "Notification";
-  // const finalBody = body || "You have a new message";
-  // const options = {
-  //   body: finalBody,
-  //   icon: icon || "/logo-192.png", // app logo
-  //   badge: "/badge.png", // small monochrome icon
-  //   image: image || "/logo-512.png", // large image (optional)
-  //   color: "#fe8126", // custom color
-  //   vibrate: [100, 50, 100],
-  //   data: {
-  //     click_action: payload.data?.click_action || "https://mywms.pages.dev",
-  //   },
-  // };
-  // self.registration.showNotification(finalTitle, options);
+  const title = notification.title || data.title || "Notification";
+  const body = notification.body || data.body || "You have a new message";
+
+  const options = {
+    body,
+    icon: notification.icon || data.icon || "/icon-192.png",
+    badge: notification.badge || data.badge || "/icon-192.png",
+    image: notification.image || data.image || "/icon-512.png",
+    data: {
+      ...(data || {}),
+      click_action:
+        notification.click_action ||
+        data.click_action ||
+        data.click_action ||
+        "./",
+    },
+    vibrate: [100, 50, 100],
+  };
+
+  // Show the notification (will replace any FCM auto-notification and allow custom icon)
+  self.registration.showNotification(title, options);
 });
 
 self.addEventListener("notificationclick", (event) => {
