@@ -708,32 +708,26 @@ export const getWorkerLastSettlement = async (req, res) => {
       .select("endDate")
       .lean();
 
-    let startDate;
-    if (lastSettlement) {
-      // If there's a previous settlement, start from the next day
-      const lastEndDate = new Date(lastSettlement.endDate);
-      lastEndDate.setDate(lastEndDate.getDate() + 1);
-      startDate = lastEndDate.toISOString().split("T")[0];
-    } else {
-      // If no previous settlement, find the earliest unsettled entry
-      const [attendance, advances, extras] = await Promise.all([
-        Attendance.find({ workerId, isSettled: false }).lean(),
-        Advance.find({ workerId, isSettled: false }).lean(),
-        Extra.find({ workerId, isSettled: false }).lean(),
-      ]);
+    // Always find the earliest unsettled entry, regardless of previous settlements
+    const [attendance, advances, extras] = await Promise.all([
+      Attendance.find({ workerId, isSettled: false }).lean(),
+      Advance.find({ workerId, isSettled: false }).lean(),
+      Extra.find({ workerId, isSettled: false }).lean(),
+    ]);
 
-      const pendingDates = [
-        ...attendance.map((a) => a.date),
-        ...advances.map((a) => a.date),
-        ...extras.map((e) => e.date),
-      ]
-        .filter(Boolean)
-        .map((d) => d.toISOString().split("T")[0]);
+    // Collect all dates and convert to YYYY-MM-DD format
+    const pendingDates = [
+      ...attendance.map((a) => a.date),
+      ...advances.map((a) => a.date),
+      ...extras.map((e) => e.date),
+    ]
+      .filter(Boolean)
+      .map((d) => d.toISOString().split("T")[0]);
 
-      startDate = pendingDates.length
-        ? pendingDates.reduce((a, b) => (a < b ? a : b))
-        : null;
-    }
+    // Find the earliest date
+    const startDate = pendingDates.length
+      ? pendingDates.reduce((a, b) => (a < b ? a : b))
+      : null;
 
     return res.status(200).json({
       msg: "Last settlement fetched",
@@ -770,12 +764,12 @@ export const generateMonthWisePDF = async (req, res) => {
     const end = new Date(`${endDate}T23:59:59.999Z`);
 
     // Fetch entries based on toggle
-    let attendance, advances, extras;
+    let attendance, advances, extras, settlementsList;
 
     if (includeTillToday === "true") {
       // Include everything till today
       const today = new Date();
-      [attendance, advances, extras] = await Promise.all([
+      [attendance, advances, extras, settlementsList] = await Promise.all([
         Attendance.find({
           workerId,
           date: { $gte: start, $lte: end },
@@ -788,9 +782,10 @@ export const generateMonthWisePDF = async (req, res) => {
           workerId,
           date: { $gte: start, $lte: today },
         }).lean(),
+        Settlement.find({ workerId }).lean(),
       ]);
     } else {
-      [attendance, advances, extras] = await Promise.all([
+      [attendance, advances, extras, settlementsList] = await Promise.all([
         Attendance.find({
           workerId,
           date: { $gte: start, $lte: end },
@@ -803,6 +798,7 @@ export const generateMonthWisePDF = async (req, res) => {
           workerId,
           date: { $gte: start, $lte: end },
         }).lean(),
+        Settlement.find({ workerId }).lean(),
       ]);
     }
 
@@ -900,10 +896,14 @@ export const generateMonthWisePDF = async (req, res) => {
       groupedByMonth[monthKey].push(entry);
     });
 
-    const entriesForTotals = entries.filter((e) => !e.settled && e.credit > 0);
+    const entriesForTotals = entries.filter((e) => !e.settled);
 
-    const totalCredits = entriesForTotals.reduce((s, e) => s + e.credit, 0);
-    const totalDebits = entriesForTotals.reduce((s, e) => s + e.debit, 0);
+    const totalCredits = entriesForTotals
+      .filter((e) => e.credit > 0)
+      .reduce((s, e) => s + e.credit, 0);
+    const totalDebits = entriesForTotals
+      .filter((e) => e.debit > 0)
+      .reduce((s, e) => s + e.debit, 0);
     const netPayable = totalCredits - totalDebits;
 
     // Generate PDF
@@ -1028,54 +1028,55 @@ export const generateMonthWisePDF = async (req, res) => {
         .restore();
     }
 
-    // ===== NET PAYABLE BADGE =====
-    const badgeWidth = 200;
+    // ===== NET PAYABLE BADGE (LEFT) =====
+    const badgeWidth = 170;
     const badgeHeight = 42;
-    const badgeX = 350;
     const badgeY = y + 10;
 
+    // Left box - NET PAYABLE
+    const netPayableX = 50;
+
     doc
-      .roundedRect(badgeX, badgeY, badgeWidth, badgeHeight, 8)
+      .roundedRect(netPayableX, badgeY, badgeWidth, badgeHeight, 8)
       .fillAndStroke("#ecfdf5", "#10b981");
 
     doc
       .fillColor("#065f46")
       .fontSize(10)
-      .text("NET PAYABLE", badgeX + 12, badgeY + 8);
+      .text("NET PAYABLE", netPayableX + 12, badgeY + 8);
 
     doc
       .fontSize(16)
       .font("NotoSans")
-      .text(`₹ ${netPayable}`, badgeX + 12, badgeY + 20);
+      .text(`₹ ${netPayable}`, netPayableX + 12, badgeY + 20);
 
     doc.fillColor("black");
 
-    // WALLET SUMMARY
-    const walletY = badgeY + badgeHeight + 10;
+    // Right box - WALLET MOVEMENT
+    const walletX = netPayableX + badgeWidth + 15;
 
     doc
-      .roundedRect(badgeX, walletY, badgeWidth, 42, 8)
+      .roundedRect(walletX, badgeY, badgeWidth, badgeHeight, 8)
       .fillAndStroke("#eff6ff", "#3b82f6");
 
     doc
       .fillColor("#1e40af")
       .fontSize(10)
-      .text("WALLET MOVEMENT", badgeX + 12, walletY + 8);
+      .text("WALLET", walletX + 12, badgeY + 8);
 
     const walletNet = settlementsList.reduce(
       (s, st) => s + (st.walletDeposit || 0),
       0,
     );
 
-    doc.fontSize(14).text(`₹ ${walletNet}`, badgeX + 12, walletY + 20);
+    doc.fontSize(14).text(`₹ ${walletNet}`, walletX + 12, badgeY + 20);
 
     doc.fillColor("black");
 
-    doc.fillColor("black");
+    // Add spacing between boxes and table
+    y = badgeY + badgeHeight + 20;
 
     // Table
-    y = doc.y;
-
     // Headers
     doc.fontSize(10);
     doc.text("Date", 50, y);
@@ -1198,6 +1199,9 @@ export const generateMonthWisePDF = async (req, res) => {
       });
 
       monthEntries.forEach((entry) => {
+        // Check if we need a new page before rendering this entry
+        ensureSpace(20);
+
         const isAbsentAttendance =
           entry.type === "attendance" && entry.credit === 0 && !entry.settled;
         const isAdvanceOrExtra =
@@ -1267,9 +1271,9 @@ export const generateMonthWisePDF = async (req, res) => {
         const hoursBoxWidth = 220;
         const hoursBoxHeight = 12 + rateEntries.length * 12 + 12; // dynamic height
         const hoursBoxX = 50;
-        const hoursBoxY = y;
 
         ensureSpace(hoursBoxHeight + 10);
+        const hoursBoxY = y;
 
         doc
           .roundedRect(hoursBoxX, hoursBoxY, hoursBoxWidth, hoursBoxHeight, 6)
@@ -1297,9 +1301,9 @@ export const generateMonthWisePDF = async (req, res) => {
       const boxWidth = 220;
       const boxHeight = 58;
       const boxX = 50;
-      const boxY = y;
 
       ensureSpace(boxHeight + 10);
+      const boxY = y;
 
       doc.roundedRect(boxX, boxY, boxWidth, boxHeight, 6).stroke("#9ca3af");
 
@@ -1322,16 +1326,18 @@ export const generateMonthWisePDF = async (req, res) => {
     });
 
     // Totals
+    ensureSpace(80);
     doc.moveTo(50, y).lineTo(550, y).stroke();
     y += 10;
     doc.fontSize(12).text("TOTALS", 50, y);
-    doc.text(`₹${totalDebits}`, 360, y, { width: 50, align: "right" });
-    doc.text(`₹${totalCredits}`, 420, y, { width: 50, align: "right" });
+    doc.text(`₹${totalCredits}`, 360, y, { width: 50, align: "right" });
+    doc.text(`₹${totalDebits}`, 420, y, { width: 50, align: "right" });
     doc.text(`₹${netPayable}`, 480, y, { width: 60, align: "right" });
 
     // Note for settled entries
     y += 25;
 
+    ensureSpace(50);
     doc.fontSize(10).fillColor("black");
     doc.text("Pending entries (included in totals)", 50, y);
 
@@ -1348,7 +1354,8 @@ export const generateMonthWisePDF = async (req, res) => {
     // reset for safety
     doc.fillColor("black");
     // ===== SIGNATURE SECTION =====
-    ensureSpace(120);
+    ensureSpace(80);
+    y += 20;
 
     doc.strokeColor("#9ca3af").moveTo(350, doc.y).lineTo(520, doc.y).stroke();
 
