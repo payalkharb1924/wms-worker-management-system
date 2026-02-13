@@ -122,9 +122,11 @@ const AttendanceTab = () => {
               rate: s.rate,
               hoursWorked: s.hoursWorked || undefined,
               startTime: s.startTime
-                ? `${selectedDate}T${s.startTime}`
+                ? `${selectedDate}T${s.startTime}:00.000Z`
                 : undefined,
-              endTime: s.endTime ? `${selectedDate}T${s.endTime}` : undefined,
+              endTime: s.endTime
+                ? `${selectedDate}T${s.endTime}:00.000Z`
+                : undefined,
             })),
             note: w.note || "",
             remarks: w.remarks || "",
@@ -184,8 +186,8 @@ const AttendanceTab = () => {
             workerId: w._id,
             date: selectedDate,
             status: "present",
-            startTime: `${selectedDate}T${startStr}`,
-            endTime: `${selectedDate}T${endStr}`,
+            startTime: `${selectedDate}T${startStr}:00.000Z`,
+            endTime: `${selectedDate}T${endStr}:00.000Z`,
             hoursWorked: hours, // optional (backend ignores if recalculated)
             restMinutes: w.restMinutes || 0,
             missingMinutes: w.missingMinutes || 0,
@@ -201,11 +203,11 @@ const AttendanceTab = () => {
           date: selectedDate,
           status: "present",
           startTime: w.startTime
-            ? `${selectedDate}T${w.startTime}`
-            : `${selectedDate}T09:00`,
+            ? `${selectedDate}T${w.startTime}:00.000Z`
+            : `${selectedDate}T09:00:00.000Z`,
           endTime: w.endTime
-            ? `${selectedDate}T${w.endTime}`
-            : `${selectedDate}T09:00`,
+            ? `${selectedDate}T${w.endTime}:00.000Z`
+            : `${selectedDate}T09:00:00.000Z`,
           restMinutes: w.restMinutes || 0,
           missingMinutes: w.missingMinutes || 0,
           rate: w.rate,
@@ -598,8 +600,8 @@ const AttendanceTab = () => {
 
     const toTimeInput = (iso) => {
       const d = new Date(iso);
-      const hh = d.getHours().toString().padStart(2, "0");
-      const mm = d.getMinutes().toString().padStart(2, "0");
+      const hh = d.getUTCHours().toString().padStart(2, "0");
+      const mm = d.getUTCMinutes().toString().padStart(2, "0");
       return `${hh}:${mm}`;
     };
 
@@ -651,8 +653,9 @@ const AttendanceTab = () => {
     if (editForm.isSplit) {
       payload.segments = editForm.segments.map((s) => ({
         mode: s.mode,
-        startTime: s.mode === "time" ? `${dateStr}T${s.startTime}` : null,
-        endTime: s.mode === "time" ? `${dateStr}T${s.endTime}` : null,
+        startTime:
+          s.mode === "time" ? `${dateStr}T${s.startTime}:00.000Z` : null,
+        endTime: s.mode === "time" ? `${dateStr}T${s.endTime}:00.000Z` : null,
         hoursWorked: s.mode === "hours" ? s.hoursWorked : undefined,
         rate: s.rate,
       }));
@@ -677,13 +680,13 @@ const AttendanceTab = () => {
         )}`;
         const endStr = `${pad(endDate.getHours())}:${pad(endDate.getMinutes())}`;
 
-        payload.startTime = `${dateStr}T${startStr}`;
-        payload.endTime = `${dateStr}T${endStr}`;
+        payload.startTime = `${dateStr}T${startStr}:00.000Z`;
+        payload.endTime = `${dateStr}T${endStr}:00.000Z`;
         payload.hoursWorked = hours;
       } else {
         // 👉 Otherwise use manual start/end
-        payload.startTime = `${dateStr}T${editForm.startTime}`;
-        payload.endTime = `${dateStr}T${editForm.endTime}`;
+        payload.startTime = `${dateStr}T${editForm.startTime}:00.000Z`;
+        payload.endTime = `${dateStr}T${editForm.endTime}:00.000Z`;
         payload.hoursWorked = undefined;
       }
     }
