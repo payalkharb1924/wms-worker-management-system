@@ -338,26 +338,26 @@ export const getWorkerLedger = async (req, res) => {
         });
       }
 
-      // wallet deposit
+      // wallet deposit (positive walletDeposit means money added to wallet)
       if (st.walletDeposit > 0) {
         entries.push({
           _id: st._id + "-wallet",
           type: "wallet",
-          direction: "out",
+          direction: "in", // Deposit means money coming IN (You got)
           amount: st.walletDeposit,
-          label: "Amount kept in wallet",
+          label: st.note || "Amount kept in wallet",
           createdAt: st.createdAt,
         });
       }
 
-      // wallet withdraw
+      // wallet withdraw (negative walletDeposit means money taken from wallet)
       if (st.walletDeposit < 0) {
         entries.push({
           _id: st._id + "-withdraw",
           type: "wallet",
-          direction: "out",
+          direction: "out", // Withdraw means money going OUT (You gave)
           amount: Math.abs(st.walletDeposit),
-          label: "Paid from wallet",
+          label: st.note || "Paid from wallet",
           createdAt: st.createdAt,
         });
       }

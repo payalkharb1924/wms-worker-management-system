@@ -50,10 +50,16 @@ const WorkersTab = () => {
   const [paidNow, setPaidNow] = useState(0);
 
   const [showWalletWithdraw, setShowWalletWithdraw] = useState(false);
+  const [showWalletDeposit, setShowWalletDeposit] = useState(false);
   const [withdrawAmount, setWithdrawAmount] = useState(0);
+  const [depositAmount, setDepositAmount] = useState(0);
   const [withdrawNote, setWithdrawNote] = useState("");
+  const [depositNote, setDepositNote] = useState("");
   const [withdrawLoading, setWithdrawLoading] = useState(false);
+  const [depositLoading, setDepositLoading] = useState(false);
   const [updatedWalletBalance, setUpdatedWalletBalance] = useState(null);
+  const [ledgerRefreshTrigger, setLedgerRefreshTrigger] = useState(0);
+  const [longPressTimer, setLongPressTimer] = useState(null);
 
   const handleUpdateWorker = async (id) => {
     try {
@@ -168,6 +174,7 @@ const WorkersTab = () => {
       // Refresh data
       fetchWorkerSummary(selectedWorker._id);
       fetchWorkers();
+      setLedgerRefreshTrigger((prev) => prev + 1); // Trigger ledger refresh
     } catch (err) {
       toast.error(err.response?.data?.msg || "Settlement failed");
     } finally {
@@ -232,10 +239,83 @@ const WorkersTab = () => {
       // Refresh worker + ledger
       fetchWorkers();
       fetchWorkerSummary(selectedWorker._id);
+      setLedgerRefreshTrigger((prev) => prev + 1); // Trigger ledger refresh
     } catch (err) {
       toast.error(err.response?.data?.msg || "Withdrawal failed");
     } finally {
       setWithdrawLoading(false);
+    }
+  };
+
+  const handleWalletDeposit = async () => {
+    if (depositAmount <= 0) {
+      return toast.error("Enter a valid amount");
+    }
+
+    try {
+      setDepositLoading(true);
+
+      await api.post(
+        `/settlement/worker/${selectedWorker._id}/wallet-deposit`,
+        {
+          amount: depositAmount,
+          note: depositNote,
+        },
+      );
+
+      setUpdatedWalletBalance(selectedWorker.walletBalance + depositAmount);
+
+      toast.success("Wallet deposit successful");
+
+      // Close modal
+      setShowWalletDeposit(false);
+      setDepositAmount(0);
+      setDepositNote("");
+
+      // Refresh worker + ledger
+      fetchWorkers();
+      fetchWorkerSummary(selectedWorker._id);
+      setLedgerRefreshTrigger((prev) => prev + 1); // Trigger ledger refresh
+    } catch (err) {
+      toast.error(err.response?.data?.msg || "Deposit failed");
+    } finally {
+      setDepositLoading(false);
+    }
+  };
+
+  const handleDownloadWalletStatement = async () => {
+    try {
+      const res = await api.get(
+        `/settlement/worker/${selectedWorker._id}/wallet-statement-pdf`,
+        { responseType: "blob" },
+      );
+      const url = window.URL.createObjectURL(new Blob([res.data]));
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute(
+        "download",
+        `wallet-statement-${selectedWorker.name}.pdf`,
+      );
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      toast.success("Wallet statement downloaded");
+    } catch (error) {
+      toast.error("Failed to download wallet statement");
+    }
+  };
+
+  const handleWalletCardLongPress = () => {
+    const timer = setTimeout(() => {
+      handleDownloadWalletStatement();
+    }, 800); // 800ms long press
+    setLongPressTimer(timer);
+  };
+
+  const handleWalletCardRelease = () => {
+    if (longPressTimer) {
+      clearTimeout(longPressTimer);
+      setLongPressTimer(null);
     }
   };
 
@@ -281,6 +361,50 @@ const WorkersTab = () => {
       window.removeEventListener("popstate", handleBack);
     };
   }, [showDetails]);
+
+  // Handle back button for wallet withdraw modal
+  useEffect(() => {
+    if (!showWalletWithdraw) return;
+
+    // Push a dummy state so back button has something to pop
+    window.history.pushState({ walletModal: true }, "");
+
+    const handleBack = () => {
+      if (showWalletWithdraw) {
+        setShowWalletWithdraw(false);
+        // Push the worker details state back so it doesn't close
+        window.history.pushState({ workerDetails: true }, "");
+      }
+    };
+
+    window.addEventListener("popstate", handleBack);
+
+    return () => {
+      window.removeEventListener("popstate", handleBack);
+    };
+  }, [showWalletWithdraw]);
+
+  // Handle back button for wallet deposit modal
+  useEffect(() => {
+    if (!showWalletDeposit) return;
+
+    // Push a dummy state so back button has something to pop
+    window.history.pushState({ walletModal: true }, "");
+
+    const handleBack = () => {
+      if (showWalletDeposit) {
+        setShowWalletDeposit(false);
+        // Push the worker details state back so it doesn't close
+        window.history.pushState({ workerDetails: true }, "");
+      }
+    };
+
+    window.addEventListener("popstate", handleBack);
+
+    return () => {
+      window.removeEventListener("popstate", handleBack);
+    };
+  }, [showWalletDeposit]);
 
   useEffect(() => {
     if (!editing && selectedWorker) {
@@ -488,21 +612,47 @@ focus:border-[var(--primary)] transition
                 </div>
 
                 <div className="mt-4 rounded-2xl bg-gradient-to-br from-emerald-500 to-emerald-600 p-4 text-white shadow-lg">
-                  <div className="flex justify-between items-center">
-                    <div>
-                      <p className="text-xs opacity-80">Wallet Balance</p>
-                      <p className="text-2xl font-extrabold">
-                        ₹{selectedWorker.walletBalance || 0}
-                      </p>
-                    </div>
+                  <div
+                    className="cursor-pointer select-none"
+                    onTouchStart={handleWalletCardLongPress}
+                    onTouchEnd={handleWalletCardRelease}
+                    onMouseDown={handleWalletCardLongPress}
+                    onMouseUp={handleWalletCardRelease}
+                    onMouseLeave={handleWalletCardRelease}
+                  >
+                    <div className="flex justify-between items-center">
+                      <div>
+                        <p className="text-xs opacity-80">Wallet Balance</p>
+                        <p className="text-2xl font-extrabold">
+                          ₹{selectedWorker.walletBalance || 0}
+                        </p>
+                      </div>
 
-                    <button
-                      onClick={() => setShowWalletWithdraw(true)}
-                      disabled={selectedWorker.walletBalance <= 0}
-                      className="bg-white/20 hover:bg-white/30 px-4 py-2 rounded-xl text-sm font-semibold backdrop-blur"
-                    >
-                      Withdraw
-                    </button>
+                      <div className="flex gap-2 items-center">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setShowWalletDeposit(true);
+                          }}
+                          className="bg-white/20 hover:bg-white/30 px-4 py-2 rounded-xl text-sm font-semibold backdrop-blur"
+                        >
+                          Deposit
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setShowWalletWithdraw(true);
+                          }}
+                          disabled={selectedWorker.walletBalance <= 0}
+                          className="bg-white/20 hover:bg-white/30 px-4 py-2 rounded-xl text-sm font-semibold backdrop-blur disabled:opacity-50"
+                        >
+                          Withdraw
+                        </button>
+                      </div>
+                    </div>
+                    <p className="text-[10px] opacity-70 mt-2 text-center">
+                      Long press to download wallet statement
+                    </p>
                   </div>
                 </div>
 
@@ -514,6 +664,7 @@ focus:border-[var(--primary)] transition
                     pendingSummary={pendingSummary}
                     summaryLoading={summaryLoading}
                     onSettleClick={() => setShowSettlePopup(true)}
+                    refreshTrigger={ledgerRefreshTrigger}
                   />
                 </div>
               </>
@@ -780,50 +931,139 @@ focus:border-[var(--primary)] transition
 
       {showWalletWithdraw && selectedWorker && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-[70]">
-          <div className="bg-white w-[90%] max-w-sm p-6 rounded-2xl shadow-xl space-y-4">
-            <div className="flex justify-between items-center">
-              <h3 className="font-bold text-lg">Withdraw from Wallet</h3>
+          <div className="bg-white w-[90%] max-w-sm rounded-2xl shadow-2xl overflow-hidden">
+            {/* Header with gradient */}
+            <div className="bg-gradient-to-br from-red-500 to-red-600 p-6 text-white">
+              <div className="flex justify-between items-center">
+                <h3 className="font-bold text-xl">Withdraw from Wallet</h3>
+                <button
+                  onClick={() => setShowWalletWithdraw(false)}
+                  className="p-1 rounded-lg hover:bg-white/20"
+                >
+                  <X />
+                </button>
+              </div>
+              <div className="mt-4">
+                <p className="text-xs opacity-80">Available Balance</p>
+                <p className="text-3xl font-extrabold">
+                  ₹{selectedWorker.walletBalance}
+                </p>
+              </div>
+            </div>
+
+            {/* Form */}
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="text-xs text-gray-600 font-medium">
+                  Withdrawal Amount
+                </label>
+                <input
+                  type="number"
+                  value={withdrawAmount || ""}
+                  max={selectedWorker.walletBalance}
+                  onChange={(e) => setWithdrawAmount(Number(e.target.value))}
+                  className="mt-1 w-full text-lg font-semibold border-2 border-gray-200 focus:border-red-500 focus:ring-2 focus:ring-red-200 rounded-xl p-3 outline-none transition"
+                  placeholder="0"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs text-gray-600 font-medium">
+                  Note (optional)
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g., Emergency withdrawal"
+                  value={withdrawNote}
+                  onChange={(e) => setWithdrawNote(e.target.value)}
+                  className="mt-1 border-2 border-gray-200 focus:border-red-500 focus:ring-2 focus:ring-red-200 rounded-xl p-3 text-sm w-full outline-none transition"
+                />
+              </div>
+
               <button
-                onClick={() => setShowWalletWithdraw(false)}
-                className="p-1 rounded hover:bg-gray-100"
+                className="bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 w-full py-3 rounded-xl text-white font-semibold disabled:opacity-60 transition shadow-lg"
+                disabled={withdrawLoading}
+                onClick={handleWalletWithdraw}
               >
-                <X />
+                {withdrawLoading ? (
+                  <div className="flex justify-center gap-2">
+                    <Loader className="w-4 h-4 animate-spin" />
+                    Processing...
+                  </div>
+                ) : (
+                  "Confirm Withdrawal"
+                )}
               </button>
             </div>
+          </div>
+        </div>
+      )}
 
-            <div className="text-center">
-              <p className="text-xs text-gray-500">Available Balance</p>
-              <p className="text-3xl font-extrabold text-emerald-600">
-                ₹{selectedWorker.walletBalance}
-              </p>
+      {showWalletDeposit && selectedWorker && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-[70]">
+          <div className="bg-white w-[90%] max-w-sm rounded-2xl shadow-2xl overflow-hidden">
+            {/* Header with gradient */}
+            <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 p-6 text-white">
+              <div className="flex justify-between items-center">
+                <h3 className="font-bold text-xl">Deposit to Wallet</h3>
+                <button
+                  onClick={() => setShowWalletDeposit(false)}
+                  className="p-1 rounded-lg hover:bg-white/20"
+                >
+                  <X />
+                </button>
+              </div>
+              <div className="mt-4">
+                <p className="text-xs opacity-80">Current Balance</p>
+                <p className="text-3xl font-extrabold">
+                  ₹{selectedWorker.walletBalance || 0}
+                </p>
+              </div>
             </div>
 
-            <div>
-              <label className="text-xs text-gray-500">Amount</label>
-              <input
-                type="number"
-                value={withdrawAmount}
-                max={selectedWorker.walletBalance}
-                onChange={(e) => setWithdrawAmount(Number(e.target.value))}
-                className="mt-1 w-full text-lg font-semibold border rounded-xl p-3"
-              />
+            {/* Form */}
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="text-xs text-gray-600 font-medium">
+                  Deposit Amount
+                </label>
+                <input
+                  type="number"
+                  value={depositAmount || ""}
+                  onChange={(e) => setDepositAmount(Number(e.target.value))}
+                  className="mt-1 w-full text-lg font-semibold border-2 border-gray-200 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 rounded-xl p-3 outline-none transition"
+                  placeholder="0"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs text-gray-600 font-medium">
+                  Note (optional)
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g., Safekeeping"
+                  value={depositNote}
+                  onChange={(e) => setDepositNote(e.target.value)}
+                  className="mt-1 border-2 border-gray-200 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 rounded-xl p-3 text-sm w-full outline-none transition"
+                />
+              </div>
+
+              <button
+                className="bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 w-full py-3 rounded-xl text-white font-semibold disabled:opacity-60 transition shadow-lg"
+                disabled={depositLoading}
+                onClick={handleWalletDeposit}
+              >
+                {depositLoading ? (
+                  <div className="flex justify-center gap-2">
+                    <Loader className="w-4 h-4 animate-spin" />
+                    Processing...
+                  </div>
+                ) : (
+                  "Confirm Deposit"
+                )}
+              </button>
             </div>
-
-            <input
-              type="text"
-              placeholder="Note (optional)"
-              value={withdrawNote}
-              onChange={(e) => setWithdrawNote(e.target.value)}
-              className="border rounded-xl p-3 text-sm w-full"
-            />
-
-            <button
-              className="primary-bg w-full py-3 rounded-xl text-white font-semibold disabled:opacity-60"
-              disabled={withdrawLoading}
-              onClick={handleWalletWithdraw}
-            >
-              {withdrawLoading ? "Processing..." : "Confirm Withdrawal"}
-            </button>
           </div>
         </div>
       )}
@@ -880,6 +1120,7 @@ focus:outline-none focus:ring-2 focus:ring-red-200
         onSettlementComplete={() => {
           fetchWorkers();
           fetchWorkerSummary(selectedWorker._id);
+          setLedgerRefreshTrigger((prev) => prev + 1); // Trigger ledger refresh
         }}
       />
     </div>

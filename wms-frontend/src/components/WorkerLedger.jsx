@@ -47,12 +47,13 @@ const WorkerLedger = ({
   pendingSummary,
   summaryLoading,
   onSettleClick,
+  refreshTrigger, // Add this prop to trigger refresh
 }) => {
   const [ledgerLoading, setLedgerLoading] = useState(false);
   const [ledgerError, setLedgerError] = useState("");
   const [entries, setEntries] = useState([]);
 
-  // Fetch ledger entries when worker changes
+  // Fetch ledger entries when worker changes or refreshTrigger changes
   useEffect(() => {
     if (!workerId) return;
 
@@ -71,7 +72,7 @@ const WorkerLedger = ({
     };
 
     fetchLedger();
-  }, [workerId]);
+  }, [workerId, refreshTrigger]); // Add refreshTrigger to dependencies
 
   const netPending =
     pendingSummary?.amounts?.netPending != null

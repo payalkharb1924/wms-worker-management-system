@@ -12,7 +12,11 @@ import {
   createMonthWiseSettlement,
   generateMonthWisePDF,
 } from "../controller/settlement.controller.js";
-import { withdrawFromWallet } from "../controller/wallet.controller.js";
+import {
+  withdrawFromWallet,
+  depositToWallet,
+  generateWalletStatementPDF,
+} from "../controller/wallet.controller.js";
 
 const router = express.Router();
 
@@ -64,6 +68,18 @@ router.post(
   "/worker/:workerId/wallet-withdraw",
   authMiddleware,
   withdrawFromWallet,
+);
+
+router.post(
+  "/worker/:workerId/wallet-deposit",
+  authMiddleware,
+  depositToWallet,
+);
+
+router.get(
+  "/worker/:workerId/wallet-statement-pdf",
+  authMiddleware,
+  generateWalletStatementPDF,
 );
 
 export default router;
